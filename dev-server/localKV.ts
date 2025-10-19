@@ -12,7 +12,7 @@ export class LocalKV {
   private filePath: string;
   private data: Record<string, string> = {};
 
-  constructor(storageFile = 'src/dev-server/.local-kv.json') {
+  constructor(storageFile = 'dev-server/.local-kv.json') {
     this.filePath = path.resolve(process.cwd(), storageFile);
   }
 

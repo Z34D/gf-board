@@ -1,4 +1,4 @@
-import app from '../../worker/index';
+import app from '../worker/index';
 import { LocalKV } from './localKV';
 
 const BACKEND_PORT = Number(process.env.BACKEND_PORT || 3001); // Use different port

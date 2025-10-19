@@ -21,5 +21,5 @@ function spawn(name: string, cmd: string, args: string[]) {
   });
 }
 
-spawn('backend', 'bun', ['--watch', 'src/dev-server/devServer.ts']);
+spawn('backend', 'bun', ['--watch', 'dev-server/devServer.ts']);
 spawn('frontend', 'bun', ['x', 'vite', '--port', '5000']);

@@ -7,7 +7,7 @@ import { opfsGLightboxAdapter, type GLightboxSlide } from '../utils/glightboxAda
 import 'glightbox/dist/css/glightbox.css'
 
 // Konstanten
-const IMAGE_DISPLAY_DURATION = 1000 // 10 Sekunden
+const IMAGE_DISPLAY_DURATION = 10000 // 10 Sekunden
 const TIMER_DELAY_AFTER_LOAD = 1000 // 1 Sekunde
 const TIMER_DELAY_AFTER_CHANGE = 500 // 0.5 Sekunden
 const VIDEO_MUTE_DELAY = 200 // 0.2 Sekunden
