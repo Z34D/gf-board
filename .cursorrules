@@ -1,0 +1,30 @@
+# GF Board Kiosk Application
+
+## Project Overview
+A React + TypeScript + Cloudflare Workers kiosk application for gym displays.
+
+## Tech Stack
+- React 19.1.1 with TypeScript
+- Vite 7.1.2 for build tooling
+- Cloudflare Workers for backend
+- Tailwind CSS v4 for styling
+- Zustand for state management
+- OPFS-tools for file storage
+
+## Architecture
+- Frontend: React SPA with two main views
+- Backend: Cloudflare Workers API
+- Storage: OPFS for offline media caching
+- Media Source: Google Drive integration
+
+## Key Features
+- Gym location selection (hardcoded initially)
+- Google Drive folder sync (shared + location-specific)
+- OPFS media storage and caching
+- Slideshow functionality for images/videos
+
+## Development Patterns
+- Component-based architecture
+- State management with Zustand
+- OPFS for offline-first media storage
+- Responsive design for kiosk displays
