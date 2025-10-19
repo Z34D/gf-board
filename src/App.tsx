@@ -8,9 +8,8 @@ function App() {
 
   // Initialize app on mount
   useEffect(() => {
-    console.log(`🚀 [APP] Component mounted, initializing...`)
     initializeApp()
-  }, []) // Empty dependency array - only run once on mount
+  }, [initializeApp])
 
   // Show slideshow if location is selected, otherwise show location selection
   if (selectedLocation) {

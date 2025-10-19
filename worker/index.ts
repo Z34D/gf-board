@@ -35,14 +35,10 @@ app.all('/api/drive/*', async (c) => {
   // Konstruiere URL korrekt - prüfe ob bereits Query Parameter vorhanden sind
   let upstreamUrl: string
   if (reqUrl.search) {
-    // Query Parameter bereits vorhanden, füge API Key hinzu
     upstreamUrl = `https://www.googleapis.com/drive/v3${drivePath}${reqUrl.search}&key=${apiKey}`
   } else {
-    // Keine Query Parameter, füge API Key hinzu
     upstreamUrl = `https://www.googleapis.com/drive/v3${drivePath}?key=${apiKey}`
   }
-  
-  console.log(`🔄 [PROXY] Forwarding to Google Drive API: ${upstreamUrl}`)
 
   const headers = new Headers(c.req.header())
   headers.delete('host')
@@ -59,12 +55,6 @@ app.all('/api/drive/*', async (c) => {
       redirect: 'follow',
     })
     
-    console.log(`✅ [PROXY] Google Drive API response: ${resp.status}`)
-    
-    // Prüfe Content-Type und handle entsprechend
-    const contentType = resp.headers.get('content-type') || ''
-    console.log(`📄 [PROXY] Response content-type: ${contentType}`)
-    
     // Kopiere alle Headers und füge CORS hinzu
     const respHeaders = new Headers()
     resp.headers.forEach((value, key) => {
@@ -78,7 +68,6 @@ app.all('/api/drive/*', async (c) => {
     
     // Verwende arrayBuffer() für alle Inhalte - das funktioniert zuverlässig
     const buf = await resp.arrayBuffer()
-    console.log(`📄 [PROXY] Forwarding ${buf.byteLength} bytes: ${contentType}`)
     
     return new Response(buf, { 
       status: resp.status, 
@@ -86,7 +75,7 @@ app.all('/api/drive/*', async (c) => {
       headers: respHeaders 
     })
   } catch (error: any) {
-    console.error(`❌ [PROXY] Google Drive API error:`, error)
+    console.error(`❌ Drive API error:`, error)
     return new Response(JSON.stringify({ error: 'Google Drive API fetch failed', details: error.message }), {
       status: 502,
       headers: {
@@ -110,8 +99,6 @@ app.get('/api/health', (c) => {
 app.get('/api/test-drive', async (c) => {
   const apiKey = c.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY'
   const testUrl = `https://www.googleapis.com/drive/v3/files?q='REDACTED_FOLDER_ID'+in+parents&key=${apiKey}`
-  
-  console.log(`🧪 [TEST] Testing Google Drive API: ${testUrl}`)
   
   try {
     const response = await fetch(testUrl)

@@ -133,13 +133,11 @@ export const useAppStore = create<AppState>()(
       
       // Actions
       setSelectedLocation: (location) => {
-        console.log(`🏢 [STORE] Setting selected location to: ${location}`)
-        
         const { selectedLocation, clearAllOPFSFiles, schedulerConfig } = get()
         
         // If changing location, clear OPFS first
         if (selectedLocation && selectedLocation !== location) {
-          console.log(`🔄 [STORE] Location changed from ${selectedLocation} to ${location}, clearing OPFS`)
+          console.log(`🔄 Location changed: ${selectedLocation} → ${location}`)
           clearAllOPFSFiles()
         }
         
@@ -147,49 +145,38 @@ export const useAppStore = create<AppState>()(
         
         // Auto-sync when location is selected
         if (location) {
-          console.log(`🔄 [STORE] Auto-syncing media for location: ${location}`)
           get().syncLocationMedia(location)
           
           // Restart scheduler if enabled
           if (schedulerConfig.enabled) {
-            console.log(`⏰ [STORE] Restarting scheduler for new location`)
             get().startScheduler()
           }
         } else {
-          // Stop scheduler if no location selected
           get().stopScheduler()
         }
       },
       setAvailableLocations: (locations) => set({ availableLocations: locations }),
-      setMediaFiles: (files) => {
-        console.log(`📁 [STORE] Setting media files: ${files.length} files`)
-        set({ mediaFiles: files })
-      },
+      setMediaFiles: (files) => set({ mediaFiles: files }),
       setCurrentIndex: (index) => set({ currentIndex: index }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),
       
       nextMedia: () => {
         const { mediaFiles, currentIndex } = get()
         const nextIndex = (currentIndex + 1) % mediaFiles.length
-        console.log(`⏭️ [STORE] Next media: ${currentIndex} → ${nextIndex}`)
         set({ currentIndex: nextIndex })
       },
       
       previousMedia: () => {
         const { mediaFiles, currentIndex } = get()
         const prevIndex = currentIndex === 0 ? mediaFiles.length - 1 : currentIndex - 1
-        console.log(`⏮️ [STORE] Previous media: ${currentIndex} → ${prevIndex}`)
         set({ currentIndex: prevIndex })
       },
       
-      clearSelectedLocation: () => {
-        console.log(`🏢 [STORE] Clearing selected location`)
-        set({ selectedLocation: null })
-      },
+      clearSelectedLocation: () => set({ selectedLocation: null }),
       
       // Google Drive & OPFS actions
       syncLocationMedia: async (location: string) => {
-        console.log(`🔄 [SYNC] Starting intelligent sync for location: ${location}`)
+        console.log(`🔄 Syncing: ${location}`)
         
         set(state => ({
           syncStatus: {
@@ -202,26 +189,19 @@ export const useAppStore = create<AppState>()(
         
         try {
           const { googleDriveFolderId } = get()
-          console.log(`📁 [SYNC] Using Google Drive folder ID: ${googleDriveFolderId}`)
           
           // 1. List all folders in the main directory
           const folders = await get().listDriveFolder(googleDriveFolderId)
-          console.log(`📂 [SYNC] Found ${folders.length} folders in main directory:`, folders.map(f => f.name))
           
           // Find shared folder and location folder
           const sharedFolder = folders.find(f => f.name.toLowerCase() === 'shared')
           const locationFolder = folders.find(f => f.name.toLowerCase() === location.toLowerCase())
           
-          console.log(`🔍 [SYNC] Shared folder found:`, sharedFolder ? sharedFolder.name : 'NOT FOUND')
-          console.log(`🔍 [SYNC] Location folder found:`, locationFolder ? locationFolder.name : 'NOT FOUND')
-          
           let allDriveFiles: MediaFile[] = []
           
           // 2. Get all files from Google Drive
           if (sharedFolder) {
-            console.log(`📁 [SYNC] Getting shared folder files`)
             const sharedFiles = await get().listDriveFolder(sharedFolder.id)
-            console.log(`📄 [SYNC] Found ${sharedFiles.length} files in shared folder`)
             
             for (const driveFile of sharedFiles) {
               if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
@@ -231,7 +211,7 @@ export const useAppStore = create<AppState>()(
                   type: driveFile.mimeType.startsWith('image/') ? 'image' : 'video',
                   url: `https://drive.google.com/uc?id=${driveFile.id}`,
                   size: driveFile.size || 0,
-                  localPath: driveFile.name, // Direct in root
+                  localPath: driveFile.name,
                   lastModified: driveFile.modifiedTime
                 }
                 allDriveFiles.push(mediaFile)
@@ -240,9 +220,7 @@ export const useAppStore = create<AppState>()(
           }
           
           if (locationFolder) {
-            console.log(`📁 [SYNC] Getting location folder files`)
             const locationFiles = await get().listDriveFolder(locationFolder.id)
-            console.log(`📄 [SYNC] Found ${locationFiles.length} files in location folder`)
             
             for (const driveFile of locationFiles) {
               if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
@@ -252,7 +230,7 @@ export const useAppStore = create<AppState>()(
                   type: driveFile.mimeType.startsWith('image/') ? 'image' : 'video',
                   url: `https://drive.google.com/uc?id=${driveFile.id}`,
                   size: driveFile.size || 0,
-                  localPath: driveFile.name, // Direct in root
+                  localPath: driveFile.name,
                   lastModified: driveFile.modifiedTime
                 }
                 allDriveFiles.push(mediaFile)
@@ -260,15 +238,11 @@ export const useAppStore = create<AppState>()(
             }
           }
           
-          console.log(`📊 [SYNC] Total files on Google Drive: ${allDriveFiles.length}`)
-          
           // 3. Get all local files from OPFS
           const localFiles = await get().getLocalFiles()
-          console.log(`💾 [SYNC] Total files in OPFS: ${localFiles.length}`)
           
           // 4. Compare and determine sync actions
           const syncActions = await get().compareFiles(allDriveFiles, localFiles)
-          console.log(`🔄 [SYNC] Sync actions:`, syncActions)
           
           // 5. Execute sync actions
           await get().executeSyncActions(syncActions)
@@ -284,10 +258,17 @@ export const useAppStore = create<AppState>()(
             }
           }))
           
-          console.log(`✅ [SYNC] Intelligent sync completed!`)
+          // Build detailed sync summary
+          const parts = []
+          if (syncActions.toDownload.length > 0) parts.push(`⬇️${syncActions.toDownload.length} new`)
+          if (syncActions.toUpdate.length > 0) parts.push(`🔄${syncActions.toUpdate.length} updated`)
+          if (syncActions.toDelete.length > 0) parts.push(`🗑️${syncActions.toDelete.length} deleted`)
+          if (syncActions.unchanged.length > 0) parts.push(`✓${syncActions.unchanged.length} unchanged`)
+          
+          console.log(`✅ Sync complete: ${parts.join(', ')} | Total: ${allDriveFiles.length} files`)
           
         } catch (error) {
-          console.error(`❌ [SYNC] Sync failed:`, error)
+          console.error(`❌ Sync failed:`, error)
           set(state => ({
             syncStatus: {
               ...state.syncStatus,
@@ -299,45 +280,27 @@ export const useAppStore = create<AppState>()(
       },
       
       listDriveFolder: async (folderId: string) => {
-        console.log(`📂 [DRIVE] Listing folder via proxy: ${folderId}`)
-        
         try {
           const url = `/api/drive/files?q='${folderId}'+in+parents`
-          
-          console.log(`📂 [DRIVE] Proxy URL: ${url}`)
-          
           const response = await fetch(url)
-          
-          console.log(`📂 [DRIVE] Response status: ${response.status}`)
-          console.log(`📂 [DRIVE] Response headers:`, Object.fromEntries(response.headers.entries()))
           
           if (!response.ok) {
             const errorText = await response.text()
-            console.error(`❌ [DRIVE] Error response:`, errorText)
             throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
           }
           
-          // Handle gzip compression properly
           const data = await response.json()
-          console.log(`📂 [DRIVE] Proxy Response:`, data)
-          console.log(`📂 [DRIVE] Found ${data.files?.length || 0} items in folder`)
-          
           return data.files || []
           
         } catch (error) {
-          console.error(`❌ [DRIVE] Failed to list folder:`, error)
+          console.error(`❌ Drive API error:`, error)
           throw error
         }
       },
       
       downloadFileFromDrive: async (fileId: string, fileName: string) => {
-        console.log(`⬇️ [DRIVE] Downloading file via proxy: ${fileName} (ID: ${fileId})`)
-        
         try {
           const downloadUrl = `/api/drive/files/${fileId}?alt=media`
-          
-          console.log(`⬇️ [DRIVE] Proxy download URL: ${downloadUrl}`)
-          
           const response = await fetch(downloadUrl)
           
           if (!response.ok) {
@@ -347,64 +310,43 @@ export const useAppStore = create<AppState>()(
           const blob = await response.blob()
           const file = new File([blob], fileName, { type: blob.type })
           
-          console.log(`💾 [OPFS] Saving file to OPFS: ${fileName} (${file.size} bytes)`)
-          await get().saveToOPFS(file, fileName) // Save directly in root
+          await get().saveToOPFS(file, fileName)
           
         } catch (error) {
-          console.error(`❌ [DRIVE] Failed to download file:`, error)
+          console.error(`❌ Download failed: ${fileName}`, error)
           throw error
         }
       },
       
       saveToOPFS: async (fileToSave: File, path: string) => {
-        console.log(`💾 [OPFS] Saving file: ${path} (${fileToSave.size} bytes)`)
-        
         try {
-          // Save directly in root, no directory creation needed
           await write(path, fileToSave.stream())
-          console.log(`✅ [OPFS] File saved successfully: ${path}`)
         } catch (error) {
-          console.error(`❌ [OPFS] Failed to save file:`, error)
+          console.error(`❌ Save failed: ${path}`, error)
           throw error
         }
       },
       
       loadFromOPFS: async (path: string) => {
-        console.log(`📖 [OPFS] Loading file: ${path}`)
-        
         try {
           const fileHandle = file(path)
           const exists = await fileHandle.exists()
           
-          if (!exists) {
-            console.log(`⚠️ [OPFS] File does not exist: ${path}`)
-            return null
-          }
+          if (!exists) return null
           
-          // Get the original file
           const originalFile = await fileHandle.getOriginFile()
-          if (!originalFile) {
-            console.log(`⚠️ [OPFS] File is null: ${path}`)
-            return null
-          }
-          console.log(`✅ [OPFS] File loaded successfully: ${path}`)
-          return originalFile
+          return originalFile || null
         } catch (error) {
-          console.error(`❌ [OPFS] Failed to load file:`, error)
+          console.error(`❌ Load failed: ${path}`, error)
           return null
         }
       },
       
       // Intelligent sync functions
       getLocalFiles: async () => {
-        console.log(`💾 [SYNC] Getting all local files from OPFS`)
-        
         try {
           const localFiles: MediaFile[] = []
-          
-          // Check existing mediaFiles for local files
           const { mediaFiles } = get()
-          console.log(`📊 [SYNC] Checking ${mediaFiles.length} existing media files for local copies`)
           
           for (const mediaFile of mediaFiles) {
             if (mediaFile.localPath) {
@@ -420,32 +362,23 @@ export const useAppStore = create<AppState>()(
                       ...mediaFile,
                       localLastModified: new Date(originalFile.lastModified)
                     }
-                    
                     localFiles.push(localFile)
-                    // Found local file - no need to log every single file
-                  } else {
-                    console.log(`⚠️ [SYNC] Local file is null: ${mediaFile.localPath}`)
                   }
-                } else {
-                  console.log(`⚠️ [SYNC] Local file does not exist: ${mediaFile.localPath}`)
                 }
               } catch (error) {
-                console.error(`❌ [SYNC] Error checking local file ${mediaFile.localPath}:`, error)
+                console.error(`❌ Check failed: ${mediaFile.localPath}`, error)
               }
             }
           }
           
-          console.log(`💾 [SYNC] Found ${localFiles.length} local files`)
           return localFiles
         } catch (error) {
-          console.error(`❌ [SYNC] Failed to get local files:`, error)
+          console.error(`❌ Get local files failed:`, error)
           return []
         }
       },
       
       compareFiles: async (driveFiles: MediaFile[], localFiles: MediaFile[]) => {
-        console.log(`🔄 [SYNC] Comparing ${driveFiles.length} drive files with ${localFiles.length} local files`)
-        
         const actions: SyncActions = {
           toDownload: [],
           toUpdate: [],
@@ -462,22 +395,15 @@ export const useAppStore = create<AppState>()(
           const localFile = localMap.get(driveFile.name)
           
           if (!localFile) {
-            // File doesn't exist locally - download
             actions.toDownload.push(driveFile)
-            console.log(`⬇️ [SYNC] To download: ${driveFile.name}`)
           } else {
-            // File exists - check if it needs updating
             const driveModified = new Date(driveFile.lastModified || 0)
             const localModified = localFile.localLastModified || new Date(0)
             
             if (driveModified > localModified) {
-              // Drive file is newer - update
               actions.toUpdate.push(driveFile)
-              console.log(`🔄 [SYNC] To update: ${driveFile.name} (drive: ${driveModified.toISOString()}, local: ${localModified.toISOString()})`)
             } else {
-              // File is up to date
               actions.unchanged.push(driveFile)
-              // File is up to date - no need to log every unchanged file
             }
           }
         }
@@ -487,65 +413,53 @@ export const useAppStore = create<AppState>()(
           const driveFile = driveMap.get(localFile.name)
           
           if (!driveFile) {
-            // File exists locally but not on drive - delete
             actions.toDelete.push(localFile)
-            console.log(`🗑️ [SYNC] To delete: ${localFile.name}`)
           }
         }
         
-        console.log(`📊 [SYNC] Sync actions summary:`)
-        console.log(`  - To download: ${actions.toDownload.length}`)
-        console.log(`  - To update: ${actions.toUpdate.length}`)
-        console.log(`  - To delete: ${actions.toDelete.length}`)
-        console.log(`  - Unchanged: ${actions.unchanged.length}`)
+        // Only log if there are actions to perform
+        const hasActions = actions.toDownload.length + actions.toUpdate.length + actions.toDelete.length > 0
+        if (hasActions) {
+          console.log(`📊 Sync: ⬇️${actions.toDownload.length} 🔄${actions.toUpdate.length} 🗑️${actions.toDelete.length}`)
+        }
         
         return actions
       },
       
       executeSyncActions: async (actions: SyncActions) => {
-        console.log(`🚀 [SYNC] Executing sync actions`)
-        
         // Download new files
         for (const mediaFile of actions.toDownload) {
-          console.log(`⬇️ [SYNC] Downloading new file: ${mediaFile.name}`)
           await get().downloadFileFromDrive(mediaFile.id, mediaFile.name)
         }
         
         // Update existing files
         for (const mediaFile of actions.toUpdate) {
-          console.log(`🔄 [SYNC] Updating file: ${mediaFile.name}`)
           await get().downloadFileFromDrive(mediaFile.id, mediaFile.name)
         }
         
         // Delete removed files
         for (const mediaFile of actions.toDelete) {
-          console.log(`🗑️ [SYNC] Deleting file: ${mediaFile.name}`)
           try {
             const fileHandle = file(mediaFile.localPath!)
             await fileHandle.remove()
-            console.log(`✅ [SYNC] Deleted: ${mediaFile.name}`)
           } catch (error) {
-            console.error(`❌ [SYNC] Failed to delete ${mediaFile.name}:`, error)
+            console.error(`❌ Delete failed: ${mediaFile.name}`, error)
           }
         }
-        
-        console.log(`✅ [SYNC] All sync actions completed`)
       },
       
       // App initialization
       initializeApp: async () => {
         const { isInitialized } = get()
-        if (isInitialized) {
-          console.log(`🚀 [APP] Already initialized, skipping`)
-          return
-        }
+        if (isInitialized) return
         
-        console.log(`🚀 [APP] Initializing application`)
+        // Set initialized flag IMMEDIATELY to prevent race conditions
+        set({ isInitialized: true })
         
         const { selectedLocation, schedulerConfig } = get()
         
         if (selectedLocation) {
-          console.log(`🏢 [APP] Found saved location: ${selectedLocation}`)
+          console.log(`🚀 Init: ${selectedLocation}`)
           
           // Auto-sync the saved location
           await get().syncLocationMedia(selectedLocation)
@@ -554,54 +468,39 @@ export const useAppStore = create<AppState>()(
           if (schedulerConfig.enabled) {
             get().startScheduler()
           }
-        } else {
-          console.log(`🏢 [APP] No saved location found`)
         }
-        
-        // Mark as initialized
-        set({ isInitialized: true })
-        console.log(`✅ [APP] Application initialization complete`)
       },
       
       // OPFS management
       clearAllOPFSFiles: async () => {
-        console.log(`🗑️ [OPFS] Clearing all files from OPFS`)
-        
         try {
           const rootDir = dir('/')
           const children = await rootDir.children()
           
-          console.log(`📁 [OPFS] Found ${children.length} items in root directory`)
-          
           for (const child of children) {
             if (child.kind === 'file') {
-              console.log(`🗑️ [OPFS] Deleting file: ${child.name}`)
               const fileHandle = file(`/${child.name}`)
               await fileHandle.remove()
             } else if (child.kind === 'dir') {
-              console.log(`🗑️ [OPFS] Deleting directory: ${child.name}`)
               const dirHandle = dir(`/${child.name}`)
               await dirHandle.remove()
             }
           }
           
-          console.log(`✅ [OPFS] All files cleared from OPFS`)
+          console.log(`🗑️ Cleared ${children.length} files`)
         } catch (error) {
-          console.error(`❌ [OPFS] Failed to clear files:`, error)
+          console.error(`❌ Clear OPFS failed:`, error)
         }
       },
 
       // Scheduler actions
       setSchedulerConfig: (config) => {
-        console.log(`⏰ [SCHEDULER] Updating config:`, config)
-        
         const currentConfig = get().schedulerConfig
         const newConfig = { ...currentConfig, ...config }
         
         // Calculate next sync time if interval changed
         if (config.interval && config.interval !== currentConfig.interval) {
           newConfig.nextSync = get().calculateNextSync(config.interval)
-          console.log(`⏰ [SCHEDULER] Next sync scheduled for: ${newConfig.nextSync?.toLocaleString()}`)
         }
         
         set({ schedulerConfig: newConfig })
@@ -615,14 +514,9 @@ export const useAppStore = create<AppState>()(
       },
 
       startScheduler: () => {
-        // Starting scheduler - no need to log every start
-        
         const { schedulerConfig, selectedLocation } = get()
         
-        if (!schedulerConfig.enabled || !selectedLocation) {
-          console.log(`⏰ [SCHEDULER] Scheduler disabled or no location selected`)
-          return
-        }
+        if (!schedulerConfig.enabled || !selectedLocation) return
         
         // Clear existing interval
         get().stopScheduler()
@@ -634,12 +528,10 @@ export const useAppStore = create<AppState>()(
           const { schedulerConfig, selectedLocation } = get()
           
           if (!schedulerConfig.enabled || !selectedLocation) {
-            console.log(`⏰ [SCHEDULER] Scheduler disabled or no location selected, stopping`)
             get().stopScheduler()
             return
           }
           
-          // Scheduled sync - no need to log every execution
           await get().syncLocationMedia(selectedLocation)
           
           // Update next sync time
@@ -661,12 +553,10 @@ export const useAppStore = create<AppState>()(
           }
         }))
         
-        console.log(`⏰ [SCHEDULER] Started with ${schedulerConfig.interval} interval`)
+        console.log(`⏰ Scheduler: ${schedulerConfig.interval}`)
       },
 
       stopScheduler: () => {
-        // Stopping scheduler - no need to log every stop
-        
         const { schedulerConfig } = get()
         
         if (schedulerConfig.intervalId) {
