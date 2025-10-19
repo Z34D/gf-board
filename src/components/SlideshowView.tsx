@@ -7,7 +7,7 @@ import { opfsGLightboxAdapter, type GLightboxSlide } from '../utils/glightboxAda
 import 'glightbox/dist/css/glightbox.css'
 
 // Konstanten
-const IMAGE_DISPLAY_DURATION = 10000 // 10 Sekunden
+const IMAGE_DISPLAY_DURATION = 1000 // 10 Sekunden
 const TIMER_DELAY_AFTER_LOAD = 1000 // 1 Sekunde
 const TIMER_DELAY_AFTER_CHANGE = 500 // 0.5 Sekunden
 const VIDEO_MUTE_DELAY = 200 // 0.2 Sekunden
@@ -22,13 +22,92 @@ const SlideshowView: React.FC = () => {
   
   const lightboxRef = useRef<any>(null)
   const [slides, setSlides] = useState<GLightboxSlide[]>([])
-  const autoplayIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const imageTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Timer-Logik für nächsten Slide
-  const startNextSlideTimer = () => {
+  // Hilfsfunktion: Setup für Video (ended event)
+  const setupVideo = () => {
+    const currentVideo = document.querySelector('video')
+    if (!currentVideo) return
+    
+    currentVideo.loop = false
+    currentVideo.muted = true
+    currentVideo.volume = 0
+    
+    // Entferne alte Event Listener
+    const oldListener = (currentVideo as any)._glightboxEndedHandler
+    if (oldListener) {
+      currentVideo.removeEventListener('ended', oldListener)
+    }
+    
+    // Neuer Event Listener für Video-Ende
+    const endedHandler = () => {
+      const currentIdx = lightboxRef.current?.index || 0
+      console.log(`🎬 Video ended at slide ${currentIdx + 1}/${slides.length}, calling goToNextSlide()`)
+      setTimeout(() => goToNextSlide(), VIDEO_END_SLIDE_DELAY)
+    }
+    
+    // Speichere Handler am Element für späteres Cleanup
+    (currentVideo as any)._glightboxEndedHandler = endedHandler
+    currentVideo.addEventListener('ended', endedHandler)
+    
+    // Video abspielen
+    if (currentVideo.paused) {
+      currentVideo.play().catch(() => {
+        const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
+        if (playButton) {
+          (playButton as HTMLElement).click()
+        }
+      })
+    }
+  }
+
+  // Hilfsfunktion: Zum nächsten Slide mit manuellem Loop
+  const goToNextSlide = () => {
+    console.log(`🔍 goToNextSlide called - lightboxRef exists: ${!!lightboxRef.current}, slides: ${slides.length}`)
+    
+    if (!lightboxRef.current || slides.length === 0) {
+      console.log('❌ goToNextSlide: lightboxRef or slides missing')
+      return
+    }
+    
+    const currentIndex = lightboxRef.current.index || 0
+    const nextIndex = (currentIndex + 1) % slides.length // Modulo für automatischen Loop
+    
+    console.log(`🔍 Current: ${currentIndex}, Next: ${nextIndex}, Total: ${slides.length}`)
+    
+    // goToSlide() ist die richtige Methode für Navigation
+    console.log(`➡️ Using goToSlide(${nextIndex})`)
+    lightboxRef.current.goToSlide(nextIndex)
+    
+    // Manuell Setup nach Slide-Wechsel (weil Events nicht zuverlässig sind)
+    setTimeout(() => {
+      const newSlide = slides[nextIndex]
+      console.log(`🔧 Manual setup for slide ${nextIndex + 1}/${slides.length}, type: ${newSlide?.type}`)
+      
+      if (newSlide?.type === 'image') {
+        startImageTimer()
+      } else if (newSlide?.type === 'video') {
+        setupVideo()
+      }
+    }, TIMER_DELAY_AFTER_CHANGE)
+  }
+
+  // Hilfsfunktion: Zum vorherigen Slide mit manuellem Loop
+  const goToPrevSlide = () => {
+    if (!lightboxRef.current || slides.length === 0) return
+    
+    const currentIndex = lightboxRef.current.index || 0
+    const prevIndex = currentIndex === 0 ? slides.length - 1 : currentIndex - 1
+    
+    // goToSlide() ist die richtige Methode für Navigation
+    lightboxRef.current.goToSlide(prevIndex)
+  }
+
+  // Timer-Logik für Bilder (nur für Bilder!)
+  const startImageTimer = () => {
     // Stoppe vorherigen Timer
-    if (autoplayIntervalRef.current) {
-      clearTimeout(autoplayIntervalRef.current)
+    if (imageTimerRef.current) {
+      clearTimeout(imageTimerRef.current)
     }
 
     if (!lightboxRef.current) return
@@ -38,38 +117,15 @@ const SlideshowView: React.FC = () => {
     
     if (!currentSlide) return
     
-    if (currentSlide.type === 'video') {
-      // Video-Slide: Finde sichtbares Video-Element
-      const allVideos = document.querySelectorAll('video')
-      let videoElement: HTMLVideoElement | null = null
-      
-      for (const video of allVideos) {
-        const rect = video.getBoundingClientRect()
-        const isVisible = rect.width > 0 && rect.height > 0 && !video.hidden
-        
-        if (isVisible && video.duration > 0) {
-          videoElement = video
-          break
-        }
-      }
-      
-      if (videoElement) {
-        const duration = videoElement.duration * 1000
-        autoplayIntervalRef.current = setTimeout(() => {
-          lightboxRef.current?.nextSlide()
-        }, duration)
-      } else {
-        // Fallback: 10 Sekunden
-        autoplayIntervalRef.current = setTimeout(() => {
-          lightboxRef.current?.nextSlide()
-        }, IMAGE_DISPLAY_DURATION)
-      }
-    } else {
-      // Bild-Slide: 10 Sekunden
-      autoplayIntervalRef.current = setTimeout(() => {
-        lightboxRef.current?.nextSlide()
+    // Timer nur für Bilder setzen
+    if (currentSlide.type === 'image') {
+      console.log(`⏱️ Starting image timer for slide ${currentIndex + 1}/${slides.length}`)
+      imageTimerRef.current = setTimeout(() => {
+        console.log(`⏱️ Image timer expired, calling goToNextSlide()`)
+        goToNextSlide()
       }, IMAGE_DISPLAY_DURATION)
     }
+    // Videos haben keinen Timer - sie nutzen das 'ended' Event
   }
 
   // Media Files zu GLightbox Slides konvertieren
@@ -99,7 +155,7 @@ const SlideshowView: React.FC = () => {
     lightboxRef.current = GLightbox({
       elements: slides as any,
       autoplayVideos: true,
-      loop: true,
+      loop: false, // Wir machen manuelles Looping mit openAt(0)
       touchNavigation: true,
       keyboardNavigation: true,
       closeOnOutsideClick: false,
@@ -127,50 +183,39 @@ const SlideshowView: React.FC = () => {
 
     // Event: Slide geladen
     lightboxRef.current.on('slide_after_load', () => {
-      setTimeout(() => {
-        // Alle Videos stumm schalten
-        const allVideos = document.querySelectorAll('video')
-        allVideos.forEach(video => {
-          video.muted = true
-          video.volume = 0
-        })
-        
-        // Versuche Video-Autoplay
-        const currentVideo = document.querySelector('video')
-        if (currentVideo && currentVideo.paused) {
-          currentVideo.play().catch(() => {
-            const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
-            if (playButton) {
-              (playButton as HTMLElement).click()
-            }
-          })
-          
-          // Loop deaktivieren
-          currentVideo.loop = false
-          
-          // Video-Ende Event
-          currentVideo.addEventListener('ended', () => {
-            setTimeout(() => {
-              lightboxRef.current?.nextSlide()
-            }, VIDEO_END_SLIDE_DELAY)
-          }, { once: true })
-          
-          // Timer starten
-          setTimeout(() => startNextSlideTimer(), TIMER_DELAY_AFTER_LOAD)
-        }
-        
-        // Plyr-Controls verstecken
+      const currentIndex = lightboxRef.current.index || 0
+      const currentSlide = slides[currentIndex]
+      
+      console.log(`🔔 slide_after_load fired: ${currentIndex + 1}/${slides.length}, type: ${currentSlide?.type}`)
+      
+      if (currentSlide?.type === 'video') {
+        // Video-Handling: Zentrale setupVideo() Funktion verwenden
         setTimeout(() => {
-          const plyrControls = document.querySelectorAll('.plyr__controls')
-          plyrControls.forEach(control => {
-            (control as HTMLElement).style.display = 'none'
-          })
-        }, CONTROLS_HIDE_DELAY)
-      }, VIDEO_MUTE_DELAY)
+          setupVideo()
+          
+          // Plyr-Controls verstecken
+          setTimeout(() => {
+            const plyrControls = document.querySelectorAll('.plyr__controls')
+            plyrControls.forEach(control => {
+              (control as HTMLElement).style.display = 'none'
+            })
+          }, CONTROLS_HIDE_DELAY)
+        }, VIDEO_MUTE_DELAY)
+      } else {
+        // Bild-Handling: Timer starten
+        setTimeout(() => startImageTimer(), TIMER_DELAY_AFTER_LOAD)
+      }
     })
 
     // Event: Slide wechselt (vorher)
-    lightboxRef.current.on('slide_before_change', () => {
+    lightboxRef.current.on('slide_before_change', (data: any) => {
+      console.log(`🔔 slide_before_change: ${data.prev.slideIndex + 1} → ${data.current.slideIndex + 1}`)
+      
+      // Stoppe Image-Timer
+      if (imageTimerRef.current) {
+        clearTimeout(imageTimerRef.current)
+      }
+      
       // Stoppe alle laufenden Videos
       const allVideos = document.querySelectorAll('video')
       allVideos.forEach(video => {
@@ -184,16 +229,33 @@ const SlideshowView: React.FC = () => {
     })
     
     // Event: Slide gewechselt (nachher)
-    lightboxRef.current.on('slide_after_change', () => {
-      setTimeout(() => startNextSlideTimer(), TIMER_DELAY_AFTER_CHANGE)
+    lightboxRef.current.on('slide_after_change', (data: any) => {
+      console.log(`🔔 slide_after_change: ${data.prev.slideIndex + 1} → ${data.current.slideIndex + 1}`)
+      
+      const currentIndex = data.current.slideIndex
+      const currentSlide = slides[currentIndex]
+      
+      console.log(`📍 Slide changed to ${currentIndex + 1}/${slides.length}, type: ${currentSlide?.type}`)
+      
+      // Timer nur für Bilder starten
+      if (currentSlide?.type === 'image') {
+        setTimeout(() => startImageTimer(), TIMER_DELAY_AFTER_CHANGE)
+      }
+      // Videos starten automatisch durch 'ended' Event
     })
     
     // Slideshow starten
     lightboxRef.current.open()
     
-    // Autoplay starten
+    // Initialer Timer-Start für erstes Slide (falls es ein Bild ist)
     setTimeout(() => {
-      startNextSlideTimer()
+      const currentIndex = lightboxRef.current?.index || 0
+      const currentSlide = slides[currentIndex]
+      
+      if (currentSlide?.type === 'image') {
+        startImageTimer()
+      }
+      // Videos starten automatisch durch 'ended' Event
     }, TIMER_DELAY_AFTER_LOAD)
   }, [slides])
 
@@ -206,12 +268,12 @@ const SlideshowView: React.FC = () => {
         case 'ArrowLeft':
           e.preventDefault()
           e.stopPropagation()
-          lightboxRef.current.prevSlide()
+          goToPrevSlide()
           break
         case 'ArrowRight':
           e.preventDefault()
           e.stopPropagation()
-          lightboxRef.current.nextSlide()
+          goToNextSlide()
           break
         case 'l':
         case 'L':
@@ -226,7 +288,7 @@ const SlideshowView: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
     }
-  }, [clearSelectedLocation])
+  }, [clearSelectedLocation, slides])
 
   // Cleanup
   useEffect(() => {
@@ -235,8 +297,8 @@ const SlideshowView: React.FC = () => {
       if (lightboxRef.current) {
         lightboxRef.current.destroy()
       }
-      if (autoplayIntervalRef.current) {
-        clearTimeout(autoplayIntervalRef.current)
+      if (imageTimerRef.current) {
+        clearTimeout(imageTimerRef.current)
       }
     }
   }, [])

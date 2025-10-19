@@ -16,6 +16,8 @@ Status: In Progress
 - [X] Project analysis and setup - Completed on 2025-01-19
 - [X] Memory Bank structure creation - Completed on 2025-01-19
 - [X] Fixed duplicate initialization issue - Completed on 2025-10-19
+- [X] Massively reduced logging across appStore and worker - Completed on 2025-10-19
+- [X] Fixed autoSlide bug in SlideshowView - Completed on 2025-10-19
 
 ## Notes
 - Using Tailwind v4 (not v3) as specified
