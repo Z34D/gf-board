@@ -17,3 +17,81 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* Prevent text selection in kiosk mode */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in input fields */
+input, textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* GLightbox Kiosk Styles */
+.glightbox-container {
+  background-color: rgba(0, 0, 0, 0.95) !important;
+}
+
+.gslide-media {
+  background: #000 !important;
+}
+
+.gslide-media video {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+  /* Immer stumm für Kiosk-Modus */
+  muted: true !important;
+}
+
+.gslide-media img {
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+}
+
+/* Hide GLightbox controls in kiosk mode */
+.gbtn {
+  display: none !important;
+}
+
+.gclose {
+  display: none !important;
+}
+
+.gnext {
+  display: none !important;
+}
+
+.gprev {
+  display: none !important;
+}
+
+/* Hide descriptions completely */
+.gslide-description {
+  display: none !important;
+}
+
+.gslide-title {
+  display: none !important;
+}
+
+/* Hide all video controls completely */
+.plyr__controls {
+  display: none !important;
+}
+
+.plyr__control {
+  display: none !important;
+}
+
+.plyr__progress {
+  display: none !important;
+}

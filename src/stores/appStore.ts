@@ -2,7 +2,24 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { file, dir, write } from 'opfs-tools'
 
-interface MediaFile {
+// Helper function to get interval in milliseconds
+function getIntervalMs(interval: SchedulerConfig['interval']): number {
+  switch (interval) {
+    case '5min':
+      return 5 * 60 * 1000
+    case '4hours':
+      return 4 * 60 * 60 * 1000
+    case '8hours':
+      return 8 * 60 * 60 * 1000
+    case 'daily4am':
+      // For daily4am, we'll use a 1-hour check interval and calculate the exact time
+      return 60 * 60 * 1000
+    default:
+      return 4 * 60 * 60 * 1000
+  }
+}
+
+export interface MediaFile {
   id: string
   name: string
   type: 'image' | 'video'
@@ -27,6 +44,13 @@ interface SyncStatus {
   progress: number
 }
 
+interface SchedulerConfig {
+  enabled: boolean
+  interval: '5min' | '4hours' | 'daily4am' | '8hours'
+  nextSync: Date | null
+  intervalId?: NodeJS.Timeout
+}
+
 interface AppState {
   // Location state
   selectedLocation: string | null
@@ -39,6 +63,9 @@ interface AppState {
   
   // Sync state
   syncStatus: SyncStatus
+  
+  // Scheduler state
+  schedulerConfig: SchedulerConfig
   
   // Google Drive config
   googleDriveFolderId: string
@@ -55,7 +82,7 @@ interface AppState {
   
   // Google Drive & OPFS actions
   syncLocationMedia: (location: string) => Promise<void>
-  downloadFileFromDrive: (fileId: string, fileName: string, folderPath: string) => Promise<void>
+  downloadFileFromDrive: (fileId: string, fileName: string) => Promise<void>
   listDriveFolder: (folderId: string) => Promise<any[]>
   saveToOPFS: (file: File, path: string) => Promise<void>
   loadFromOPFS: (path: string) => Promise<File | null>
@@ -70,6 +97,12 @@ interface AppState {
   
   // OPFS management
   clearAllOPFSFiles: () => Promise<void>
+  
+  // Scheduler actions
+  setSchedulerConfig: (config: Partial<SchedulerConfig>) => void
+  startScheduler: () => void
+  stopScheduler: () => void
+  calculateNextSync: (interval: SchedulerConfig['interval']) => Date
 }
 
 export const useAppStore = create<AppState>()(
@@ -87,13 +120,18 @@ export const useAppStore = create<AppState>()(
         error: null,
         progress: 0
       },
+      schedulerConfig: {
+        enabled: true,
+        interval: '4hours',
+        nextSync: null
+      },
       googleDriveFolderId: 'REDACTED_FOLDER_ID',
       
       // Actions
       setSelectedLocation: (location) => {
         console.log(`🏢 [STORE] Setting selected location to: ${location}`)
         
-        const { selectedLocation, clearAllOPFSFiles } = get()
+        const { selectedLocation, clearAllOPFSFiles, schedulerConfig } = get()
         
         // If changing location, clear OPFS first
         if (selectedLocation && selectedLocation !== location) {
@@ -107,6 +145,15 @@ export const useAppStore = create<AppState>()(
         if (location) {
           console.log(`🔄 [STORE] Auto-syncing media for location: ${location}`)
           get().syncLocationMedia(location)
+          
+          // Restart scheduler if enabled
+          if (schedulerConfig.enabled) {
+            console.log(`⏰ [STORE] Restarting scheduler for new location`)
+            get().startScheduler()
+          }
+        } else {
+          // Stop scheduler if no location selected
+          get().stopScheduler()
         }
       },
       setAvailableLocations: (locations) => set({ availableLocations: locations }),
@@ -279,7 +326,7 @@ export const useAppStore = create<AppState>()(
         }
       },
       
-      downloadFileFromDrive: async (fileId: string, fileName: string, folderPath: string) => {
+      downloadFileFromDrive: async (fileId: string, fileName: string) => {
         console.log(`⬇️ [DRIVE] Downloading file via proxy: ${fileName} (ID: ${fileId})`)
         
         try {
@@ -332,6 +379,10 @@ export const useAppStore = create<AppState>()(
           
           // Get the original file
           const originalFile = await fileHandle.getOriginFile()
+          if (!originalFile) {
+            console.log(`⚠️ [OPFS] File is null: ${path}`)
+            return null
+          }
           console.log(`✅ [OPFS] File loaded successfully: ${path}`)
           return originalFile
         } catch (error) {
@@ -360,13 +411,17 @@ export const useAppStore = create<AppState>()(
                 if (exists) {
                   const originalFile = await fileHandle.getOriginFile()
                   
-                  const localFile: MediaFile = {
-                    ...mediaFile,
-                    localLastModified: new Date(originalFile.lastModified)
+                  if (originalFile) {
+                    const localFile: MediaFile = {
+                      ...mediaFile,
+                      localLastModified: new Date(originalFile.lastModified)
+                    }
+                    
+                    localFiles.push(localFile)
+                    console.log(`📄 [SYNC] Found local file: ${mediaFile.localPath} (${originalFile.size} bytes, modified: ${originalFile.lastModified})`)
+                  } else {
+                    console.log(`⚠️ [SYNC] Local file is null: ${mediaFile.localPath}`)
                   }
-                  
-                  localFiles.push(localFile)
-                  console.log(`📄 [SYNC] Found local file: ${mediaFile.localPath} (${originalFile.size} bytes, modified: ${originalFile.lastModified})`)
                 } else {
                   console.log(`⚠️ [SYNC] Local file does not exist: ${mediaFile.localPath}`)
                 }
@@ -447,26 +502,26 @@ export const useAppStore = create<AppState>()(
         console.log(`🚀 [SYNC] Executing sync actions`)
         
         // Download new files
-        for (const file of actions.toDownload) {
-          console.log(`⬇️ [SYNC] Downloading new file: ${file.name}`)
-          await get().downloadFileFromDrive(file.id, file.name, '')
+        for (const mediaFile of actions.toDownload) {
+          console.log(`⬇️ [SYNC] Downloading new file: ${mediaFile.name}`)
+          await get().downloadFileFromDrive(mediaFile.id, mediaFile.name)
         }
         
         // Update existing files
-        for (const file of actions.toUpdate) {
-          console.log(`🔄 [SYNC] Updating file: ${file.name}`)
-          await get().downloadFileFromDrive(file.id, file.name, '')
+        for (const mediaFile of actions.toUpdate) {
+          console.log(`🔄 [SYNC] Updating file: ${mediaFile.name}`)
+          await get().downloadFileFromDrive(mediaFile.id, mediaFile.name)
         }
         
         // Delete removed files
-        for (const file of actions.toDelete) {
-          console.log(`🗑️ [SYNC] Deleting file: ${file.name}`)
+        for (const mediaFile of actions.toDelete) {
+          console.log(`🗑️ [SYNC] Deleting file: ${mediaFile.name}`)
           try {
-            const fileHandle = file(file.localPath!)
+            const fileHandle = file(mediaFile.localPath!)
             await fileHandle.remove()
-            console.log(`✅ [SYNC] Deleted: ${file.name}`)
+            console.log(`✅ [SYNC] Deleted: ${mediaFile.name}`)
           } catch (error) {
-            console.error(`❌ [SYNC] Failed to delete ${file.name}:`, error)
+            console.error(`❌ [SYNC] Failed to delete ${mediaFile.name}:`, error)
           }
         }
         
@@ -477,7 +532,7 @@ export const useAppStore = create<AppState>()(
       initializeApp: async () => {
         console.log(`🚀 [APP] Initializing application`)
         
-        const { selectedLocation } = get()
+        const { selectedLocation, schedulerConfig } = get()
         
         if (selectedLocation) {
           console.log(`🏢 [APP] Found saved location: ${selectedLocation}`)
@@ -485,6 +540,12 @@ export const useAppStore = create<AppState>()(
           
           // Auto-sync the saved location
           await get().syncLocationMedia(selectedLocation)
+          
+          // Start scheduler if enabled
+          if (schedulerConfig.enabled) {
+            console.log(`⏰ [APP] Starting scheduler for saved location`)
+            get().startScheduler()
+          }
         } else {
           console.log(`🏢 [APP] No saved location found`)
         }
@@ -507,7 +568,7 @@ export const useAppStore = create<AppState>()(
               console.log(`🗑️ [OPFS] Deleting file: ${child.name}`)
               const fileHandle = file(`/${child.name}`)
               await fileHandle.remove()
-            } else if (child.kind === 'directory') {
+            } else if (child.kind === 'dir') {
               console.log(`🗑️ [OPFS] Deleting directory: ${child.name}`)
               const dirHandle = dir(`/${child.name}`)
               await dirHandle.remove()
@@ -519,12 +580,126 @@ export const useAppStore = create<AppState>()(
           console.error(`❌ [OPFS] Failed to clear files:`, error)
         }
       },
+
+      // Scheduler actions
+      setSchedulerConfig: (config) => {
+        console.log(`⏰ [SCHEDULER] Updating config:`, config)
+        
+        const currentConfig = get().schedulerConfig
+        const newConfig = { ...currentConfig, ...config }
+        
+        // Calculate next sync time if interval changed
+        if (config.interval && config.interval !== currentConfig.interval) {
+          newConfig.nextSync = get().calculateNextSync(config.interval)
+          console.log(`⏰ [SCHEDULER] Next sync scheduled for: ${newConfig.nextSync?.toLocaleString()}`)
+        }
+        
+        set({ schedulerConfig: newConfig })
+        
+        // Restart scheduler if enabled
+        if (newConfig.enabled) {
+          get().startScheduler()
+        } else {
+          get().stopScheduler()
+        }
+      },
+
+      startScheduler: () => {
+        console.log(`⏰ [SCHEDULER] Starting scheduler`)
+        
+        const { schedulerConfig, selectedLocation } = get()
+        
+        if (!schedulerConfig.enabled || !selectedLocation) {
+          console.log(`⏰ [SCHEDULER] Scheduler disabled or no location selected`)
+          return
+        }
+        
+        // Clear existing interval
+        get().stopScheduler()
+        
+        // Set up interval based on configuration
+        const intervalMs = getIntervalMs(schedulerConfig.interval)
+        
+        const intervalId = setInterval(async () => {
+          const { schedulerConfig, selectedLocation } = get()
+          
+          if (!schedulerConfig.enabled || !selectedLocation) {
+            console.log(`⏰ [SCHEDULER] Scheduler disabled or no location selected, stopping`)
+            get().stopScheduler()
+            return
+          }
+          
+          console.log(`⏰ [SCHEDULER] Executing scheduled sync for ${selectedLocation}`)
+          await get().syncLocationMedia(selectedLocation)
+          
+          // Update next sync time
+          const nextSync = get().calculateNextSync(schedulerConfig.interval)
+          set(state => ({
+            schedulerConfig: {
+              ...state.schedulerConfig,
+              nextSync
+            }
+          }))
+          
+        }, intervalMs)
+        
+        // Store interval ID for cleanup
+        set(state => ({
+          schedulerConfig: {
+            ...state.schedulerConfig,
+            intervalId: intervalId as any
+          }
+        }))
+        
+        console.log(`⏰ [SCHEDULER] Scheduler started with ${schedulerConfig.interval} interval`)
+      },
+
+      stopScheduler: () => {
+        console.log(`⏰ [SCHEDULER] Stopping scheduler`)
+        
+        const { schedulerConfig } = get()
+        
+        if (schedulerConfig.intervalId) {
+          clearInterval(schedulerConfig.intervalId as any)
+          set(state => ({
+            schedulerConfig: {
+              ...state.schedulerConfig,
+              intervalId: undefined
+            }
+          }))
+        }
+      },
+
+      calculateNextSync: (interval) => {
+        const now = new Date()
+        
+        switch (interval) {
+          case '5min':
+            return new Date(now.getTime() + 5 * 60 * 1000)
+          case '4hours':
+            return new Date(now.getTime() + 4 * 60 * 60 * 1000)
+          case '8hours':
+            return new Date(now.getTime() + 8 * 60 * 60 * 1000)
+          case 'daily4am':
+            const tomorrow = new Date(now)
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            tomorrow.setHours(4, 0, 0, 0)
+            return tomorrow
+          default:
+            return new Date(now.getTime() + 4 * 60 * 60 * 1000)
+        }
+      },
     }),
     {
       name: 'gf-board-storage',
       partialize: (state) => ({ 
         selectedLocation: state.selectedLocation,
-        mediaFiles: state.mediaFiles 
+        mediaFiles: state.mediaFiles,
+        schedulerConfig: {
+          enabled: state.schedulerConfig.enabled,
+          interval: state.schedulerConfig.interval,
+          nextSync: state.schedulerConfig.nextSync
+        }
       }),
     }
   )

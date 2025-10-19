@@ -18,6 +18,12 @@ app.use('*', cors({
   maxAge: 86400,
 }))
 
+// Permissions Policy für Autoplay
+app.use('*', async (c, next) => {
+  await next()
+  c.header('Permissions-Policy', 'autoplay=(self)')
+})
+
 // Google Drive API Proxy: leitet `/api/drive/*` an Google Drive API weiter
 app.all('/api/drive/*', async (c) => {
   const apiKey = c.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY'
@@ -79,7 +85,7 @@ app.all('/api/drive/*', async (c) => {
       statusText: resp.statusText,
       headers: respHeaders 
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ [PROXY] Google Drive API error:`, error)
     return new Response(JSON.stringify({ error: 'Google Drive API fetch failed', details: error.message }), {
       status: 502,
@@ -117,7 +123,7 @@ app.get('/api/test-drive', async (c) => {
       headers: Object.fromEntries(response.headers.entries()),
       body: data.substring(0, 500) + (data.length > 500 ? '...' : '')
     })
-  } catch (error) {
+  } catch (error: any) {
     return c.json({
       error: error.message,
       testUrl

@@ -1,55 +1,283 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { file } from 'opfs-tools'
+import GLightbox from 'glightbox'
+import { opfsGLightboxAdapter, GLightboxSlide } from '../utils/glightboxAdapter'
+
+// GLightbox CSS importieren
+import 'glightbox/dist/css/glightbox.css'
 
 const SlideshowView: React.FC = () => {
-  const { selectedLocation, clearSelectedLocation, syncStatus, mediaFiles, currentIndex, nextMedia, previousMedia } = useAppStore()
-  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
+  const { 
+    selectedLocation, 
+    clearSelectedLocation, 
+    syncStatus, 
+    mediaFiles, 
+    schedulerConfig
+  } = useAppStore()
+  
+  const lightboxRef = useRef<any>(null)
+  const [slides, setSlides] = useState<GLightboxSlide[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  // Load current media file from OPFS
+  // Media Files zu GLightbox Slides konvertieren
   useEffect(() => {
-    const loadCurrentMedia = async () => {
-      if (mediaFiles.length === 0) return
-      
-      const currentFile = mediaFiles[currentIndex]
-      if (!currentFile.localPath) return
-      
+    const convertMediaToSlides = async () => {
+      if (mediaFiles.length === 0) {
+        setSlides([])
+        return
+      }
+
       setIsLoading(true)
-      console.log(`🖼️ [SLIDESHOW] Loading current media: ${currentFile.name}`)
-      
+      console.log(`🎬 [SLIDESHOW] Converting ${mediaFiles.length} media files to GLightbox slides`)
+
       try {
-        const fileHandle = file(currentFile.localPath)
-        const exists = await fileHandle.exists()
-        
-        if (exists) {
-          const originalFile = await fileHandle.getOriginFile()
-          const url = URL.createObjectURL(originalFile)
-          setCurrentImageUrl(url)
-          console.log(`✅ [SLIDESHOW] Loaded image: ${currentFile.name}`)
-        } else {
-          console.log(`⚠️ [SLIDESHOW] File not found in OPFS: ${currentFile.localPath}`)
-          setCurrentImageUrl(null)
-        }
+        const convertedSlides = await opfsGLightboxAdapter.convertToSlides(mediaFiles)
+        setSlides(convertedSlides)
+        console.log(`✅ [SLIDESHOW] Successfully converted ${convertedSlides.length} slides`)
       } catch (error) {
-        console.error(`❌ [SLIDESHOW] Failed to load media:`, error)
-        setCurrentImageUrl(null)
+        console.error(`❌ [SLIDESHOW] Failed to convert media files:`, error)
+        setSlides([])
       } finally {
         setIsLoading(false)
       }
     }
 
-    loadCurrentMedia()
-  }, [mediaFiles, currentIndex])
+    convertMediaToSlides()
+  }, [mediaFiles])
 
-  // Cleanup object URLs
+  // GLightbox initialisieren wenn Slides bereit sind
   useEffect(() => {
-    return () => {
-      if (currentImageUrl) {
-        URL.revokeObjectURL(currentImageUrl)
+    if (slides.length > 0 && !lightboxRef.current) {
+      console.log(`🎬 [SLIDESHOW] Initializing GLightbox with ${slides.length} slides`)
+      
+      lightboxRef.current = GLightbox({
+        elements: slides,
+        autoplayVideos: true,
+        loop: true,
+        touchNavigation: true,
+        keyboardNavigation: true,
+        closeOnOutsideClick: false,
+        closeButton: false,
+        width: '90vw',
+        height: 'auto',
+        videosWidth: '90vw',
+        descPosition: 'bottom',
+        openEffect: 'zoom',
+        closeEffect: 'fade',
+        slideEffect: 'slide',
+        plyr: {
+          config: {
+            ratio: '16:9',
+            muted: true, // Immer stumm für Kiosk-Modus
+            hideControls: false, // Controls aktiviert für Autoplay
+            autoplay: true,
+            loop: { active: true },
+            controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+            clickToPlay: false, // Verhindert Klick-zu-Play
+            keyboard: { focused: false, global: false } // Deaktiviere Plyr Keyboard-Navigation
+          }
+        }
+      })
+
+      // Event-Handler für GLightbox
+      lightboxRef.current.on('slide_after_load', (data: any) => {
+        console.log(`🎬 [SLIDESHOW] Slide loaded, setting up video autoplay`)
+        
+        // Stelle sicher dass alle Videos stumm sind und simuliere Benutzerinteraktion
+        setTimeout(() => {
+          // Alle Videos stumm schalten
+          const allVideos = document.querySelectorAll('video')
+          allVideos.forEach(video => {
+            video.muted = true
+            video.volume = 0
+            console.log(`🎬 [SLIDESHOW] Video muted:`, video.src)
+          })
+          
+          // Versuche Video-Autoplay
+          const currentVideo = document.querySelector('video')
+          if (currentVideo && currentVideo.paused) {
+            console.log(`🎬 [SLIDESHOW] Auto-playing video after slide load`)
+            currentVideo.play().catch(err => {
+              console.log(`🎬 [SLIDESHOW] Video autoplay failed, trying click simulation:`, err)
+              const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
+              if (playButton) {
+                ;(playButton as HTMLElement).click()
+              }
+            })
+          }
+          
+          // Verstecke Plyr-Controls nach dem Laden
+          setTimeout(() => {
+            const plyrControls = document.querySelectorAll('.plyr__controls')
+            plyrControls.forEach(control => {
+              (control as HTMLElement).style.display = 'none'
+            })
+          }, 500)
+        }, 200)
+      })
+
+      // Event-Handler für Slide-Wechsel (für Videos) - verwende slide_before_change um Endlosschleife zu vermeiden
+      lightboxRef.current.on('slide_before_change', (data: any) => {
+        console.log(`🎬 [SLIDESHOW] Slide changing, stopping all videos`)
+        
+        // Stoppe alle laufenden Videos und stelle sicher dass sie stumm sind
+        const allVideos = document.querySelectorAll('video')
+        allVideos.forEach(video => {
+          if (!video.paused) {
+            console.log(`🎬 [SLIDESHOW] Stopping video:`, video.src)
+            video.pause()
+            video.currentTime = 0 // Zurück zum Anfang
+          }
+          // Stelle sicher dass Video stumm ist
+          video.muted = true
+          video.volume = 0
+        })
+      })
+      
+      // Automatisch die Slideshow starten
+      console.log(`🎬 [SLIDESHOW] Opening GLightbox...`)
+      lightboxRef.current.open()
+    }
+  }, [slides])
+
+  // Keyboard Handler für Navigation und L-Taste
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!lightboxRef.current) return
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          e.stopPropagation()
+          lightboxRef.current.prevSlide()
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          e.stopPropagation()
+          lightboxRef.current.nextSlide()
+          break
+        case 'l':
+        case 'L':
+          e.preventDefault()
+          clearSelectedLocation()
+          break
       }
     }
-  }, [currentImageUrl])
+
+    // Event Listener mit hoher Priorität
+    document.addEventListener('keydown', handleKeyDown, true)
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [clearSelectedLocation])
+
+  // Kiosk-Modus: MDN Autoplay Guide Implementation
+  useEffect(() => {
+    const handleAutoplay = async () => {
+      console.log(`🎬 [KIOSK] Implementing MDN autoplay guide`)
+      
+      // 1. Check autoplay policy using Navigator.getAutoplayPolicy()
+      if ('getAutoplayPolicy' in navigator) {
+        const policy = (navigator as any).getAutoplayPolicy('mediaelement')
+        console.log(`🎬 [KIOSK] Autoplay policy:`, policy)
+        
+        if (policy === 'allowed') {
+          console.log(`🎬 [KIOSK] Autoplay with audio is allowed`)
+        } else if (policy === 'allowed-muted') {
+          console.log(`🎬 [KIOSK] Only muted autoplay is allowed`)
+          // Videos sind bereits muted in der Plyr-Konfiguration
+        } else if (policy === 'disallowed') {
+          console.log(`🎬 [KIOSK] Autoplay is disallowed, will retry after user interaction`)
+        }
+      }
+      
+      // 2. Try to play videos and handle failures gracefully
+      const videos = document.querySelectorAll('video')
+      for (const video of videos) {
+        try {
+          const playPromise = video.play()
+          if (playPromise !== undefined) {
+            await playPromise
+            console.log(`🎬 [KIOSK] Video autoplay successful`)
+          }
+        } catch (error: any) {
+          if (error.name === 'NotAllowedError') {
+            console.log(`🎬 [KIOSK] Autoplay blocked, will retry after user interaction`)
+            // Set up retry mechanism
+            setupAutoplayRetry(video)
+          } else {
+            console.log(`🎬 [KIOSK] Video play error:`, error)
+          }
+        }
+      }
+    }
+
+    // Setup retry mechanism for blocked autoplay
+    const setupAutoplayRetry = (video: HTMLVideoElement) => {
+      const retryInterval = setInterval(() => {
+        video.play()
+          .then(() => {
+            console.log(`🎬 [KIOSK] Video autoplay successful after retry`)
+            clearInterval(retryInterval)
+          })
+          .catch((error) => {
+            console.log(`🎬 [KIOSK] Autoplay retry failed, user interaction needed`)
+          })
+      }, 3000) // Retry every 3 seconds
+      
+      // Clear interval after 30 seconds to avoid infinite retries
+      setTimeout(() => {
+        clearInterval(retryInterval)
+      }, 30000)
+    }
+
+    // Handle first play event to detect autoplay success
+    const handleFirstPlay = (event: Event) => {
+      const video = event.target as HTMLVideoElement
+      console.log(`🎬 [KIOSK] First play event detected for video`)
+      
+      // Remove listener after first play
+      video.removeEventListener('play', handleFirstPlay)
+    }
+
+    // Add play event listeners to all videos
+    const videos = document.querySelectorAll('video')
+    videos.forEach(video => {
+      video.addEventListener('play', handleFirstPlay)
+    })
+
+    // Try autoplay immediately
+    handleAutoplay()
+    
+    // Also try on any user interaction
+    const handleUserInteraction = () => {
+      console.log(`🎬 [KIOSK] User interaction detected, retrying autoplay`)
+      handleAutoplay()
+    }
+
+    document.addEventListener('click', handleUserInteraction, { once: true })
+    document.addEventListener('keydown', handleUserInteraction, { once: true })
+    document.addEventListener('touchstart', handleUserInteraction, { once: true })
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+      document.removeEventListener('touchstart', handleUserInteraction)
+    }
+  }, [])
+
+  // Cleanup beim Unmount
+  useEffect(() => {
+    return () => {
+      console.log(`🧹 [SLIDESHOW] Cleaning up GLightbox`)
+      opfsGLightboxAdapter.cleanup()
+      if (lightboxRef.current) {
+        lightboxRef.current.destroy()
+      }
+    }
+  }, [])
 
   return (
     <div className="w-full h-screen bg-black text-white flex flex-col items-center justify-center">
@@ -63,7 +291,7 @@ const SlideshowView: React.FC = () => {
         </p>
         {mediaFiles.length > 0 && (
           <p className="text-sm text-gray-400">
-            {currentIndex + 1} / {mediaFiles.length} - {mediaFiles[currentIndex]?.name}
+            {mediaFiles.length} Medien verfügbar • Slideshow läuft automatisch
           </p>
         )}
       </div>
@@ -96,6 +324,11 @@ const SlideshowView: React.FC = () => {
             <div className="text-green-400 text-xs">
               {mediaFiles.length} Medien verfügbar
             </div>
+            {schedulerConfig.enabled && schedulerConfig.nextSync && (
+              <div className="text-blue-300 text-xs mt-1">
+                ⏰ Nächste Sync: {new Date(schedulerConfig.nextSync).toLocaleTimeString()}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -103,90 +336,73 @@ const SlideshowView: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex items-center justify-center w-full">
         {mediaFiles.length > 0 ? (
-          <div className="text-center">
+          <div className="w-full h-full">
             {isLoading ? (
-              <div className="text-6xl mb-8">⏳</div>
-            ) : currentImageUrl ? (
-              <div className="max-w-4xl max-h-4xl">
-                <img 
-                  src={currentImageUrl} 
-                  alt={mediaFiles[currentIndex]?.name}
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                  style={{ maxHeight: '70vh' }}
-                />
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-6xl mb-8">⏳</div>
+                  <h2 className="text-2xl font-bold text-gray-300 mb-4">
+                    Bereite Slideshow vor...
+                  </h2>
+                  <p className="text-lg text-gray-500">
+                    Konvertiere {mediaFiles.length} Medien für GLightbox
+                  </p>
+                </div>
+              </div>
+            ) : slides.length > 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-6xl mb-8">🎬</div>
+                  <h2 className="text-2xl font-bold text-gray-300 mb-4">
+                    GLightbox Slideshow läuft
+                  </h2>
+                  <p className="text-lg text-gray-500">
+                    {slides.length} Medien werden automatisch abgespielt
+                  </p>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Videos werden automatisch abgespielt und wiederholt
+                  </p>
+                </div>
               </div>
             ) : (
-              <div className="text-6xl mb-8">❌</div>
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="text-6xl mb-8">❌</div>
+                  <h2 className="text-2xl font-bold text-gray-300 mb-4">
+                    Fehler beim Laden der Slideshow
+                  </h2>
+                  <p className="text-lg text-gray-500">
+                    Medien konnten nicht konvertiert werden
+                  </p>
+                </div>
+              </div>
             )}
-            
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold text-gray-300 mb-4">
-                {mediaFiles[currentIndex]?.name || 'Kein Bild'}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="text-6xl mb-8">📺</div>
+              <h2 className="text-4xl font-bold text-gray-300 mb-4">
+                {syncStatus.isSyncing ? 'Synchronisiere...' : 'Slideshow wird hier angezeigt'}
               </h2>
-              <p className="text-lg text-gray-500">
-                {mediaFiles[currentIndex]?.type === 'image' ? 'Bild' : 'Video'} • 
-                {mediaFiles[currentIndex]?.size ? ` ${Math.round(mediaFiles[currentIndex].size / 1024)} KB` : ' Größe unbekannt'}
+              <p className="text-xl text-gray-500">
+                {syncStatus.isSyncing ? 'Lade Medien von Google Drive...' : 'Medien werden später hier geladen'}
               </p>
             </div>
           </div>
-        ) : (
-          <div className="text-center">
-            <div className="text-6xl mb-8">📺</div>
-            <h2 className="text-4xl font-bold text-gray-300 mb-4">
-              {syncStatus.isSyncing ? 'Synchronisiere...' : 'Slideshow wird hier angezeigt'}
-            </h2>
-            <p className="text-xl text-gray-500">
-              {syncStatus.isSyncing ? 'Lade Medien von Google Drive...' : 'Medien werden später hier geladen'}
-            </p>
-          </div>
         )}
       </div>
-
-      {/* Navigation Controls */}
-      {mediaFiles.length > 1 && (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex gap-4">
-          <button
-            onClick={previousMedia}
-            className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg text-white font-semibold transition-colors"
-          >
-            ← Vorheriges
-          </button>
-          <button
-            onClick={nextMedia}
-            className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg text-white font-semibold transition-colors"
-          >
-            Nächstes →
-          </button>
-        </div>
-      )}
 
       {/* Instructions */}
       <div className="absolute bottom-8 left-8 text-left">
         <p className="text-sm text-gray-500">
-          Drücke <span className="bg-gray-800 px-2 py-1 rounded text-yellow-400 font-mono">L</span> um zurück zur Übersicht zu gehen
+          <span className="bg-gray-800 px-2 py-1 rounded text-yellow-400 font-mono">← →</span> Navigation • 
+          <span className="bg-gray-800 px-2 py-1 rounded text-yellow-400 font-mono ml-2">L</span> Zurück zur Übersicht
         </p>
-        {mediaFiles.length > 1 && (
-          <p className="text-sm text-gray-500 mt-1">
-            Pfeiltasten oder Buttons zum Navigieren
-          </p>
-        )}
+        <p className="text-sm text-gray-500 mt-1">
+          Slideshow läuft automatisch • Videos werden endlos wiederholt
+        </p>
       </div>
-
-      {/* Keyboard Handler */}
-      <div 
-        className="w-full h-full absolute inset-0 focus:outline-none"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key.toLowerCase() === 'l') {
-            clearSelectedLocation()
-          } else if (e.key === 'ArrowLeft') {
-            previousMedia()
-          } else if (e.key === 'ArrowRight') {
-            nextMedia()
-          }
-        }}
-        autoFocus
-      />
     </div>
   )
 }
