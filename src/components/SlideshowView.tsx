@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { file } from 'opfs-tools'
 import GLightbox from 'glightbox'
-import { opfsGLightboxAdapter, GLightboxSlide } from '../utils/glightboxAdapter'
+import { opfsGLightboxAdapter, type GLightboxSlide } from '../utils/glightboxAdapter'
 
 // GLightbox CSS importieren
 import 'glightbox/dist/css/glightbox.css'
@@ -19,6 +18,88 @@ const SlideshowView: React.FC = () => {
   const lightboxRef = useRef<any>(null)
   const [slides, setSlides] = useState<GLightboxSlide[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const autoplayIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Funktion um den nächsten Slide-Timer zu starten
+  const startNextSlideTimer = () => {
+    // Stoppe vorherigen Timer
+    if (autoplayIntervalRef.current) {
+      clearTimeout(autoplayIntervalRef.current)
+    }
+
+    // Prüfe den aktuellen Slide-Typ basierend auf dem aktuellen Slide-Index
+    if (lightboxRef.current) {
+      const currentIndex = lightboxRef.current.index || 0
+      const currentSlide = slides[currentIndex]
+      
+      console.log(`🎬 [TIMER] Current slide:`, { 
+        index: currentIndex, 
+        type: currentSlide?.type,
+        href: currentSlide?.href?.split('/').pop()
+      })
+      
+      if (currentSlide && currentSlide.type === 'video') {
+        // Video-Slide - finde das aktive Video-Element (das sichtbare)
+        const allVideos = document.querySelectorAll('video')
+        let videoElement = null
+        
+        console.log(`🎬 [TIMER] Looking for video element, found ${allVideos.length} videos`)
+        
+        for (const video of allVideos) {
+          const rect = video.getBoundingClientRect()
+          const isVisible = rect.width > 0 && rect.height > 0 && !video.hidden
+          console.log(`🎬 [TIMER] Video check:`, {
+            src: video.src.substring(0, 50) + '...',
+            visible: isVisible,
+            width: rect.width,
+            height: rect.height,
+            duration: video.duration
+          })
+          
+          if (isVisible && video.duration > 0) {
+            videoElement = video
+            break
+          }
+        }
+        
+        if (videoElement) {
+          const duration = videoElement.duration || 0
+          console.log(`🎬 [TIMER] Video slide detected, setting timer for ${duration.toFixed(1)}s`)
+          console.log(`🎬 [TIMER] Video element details:`, {
+            duration: videoElement.duration,
+            currentTime: videoElement.currentTime,
+            paused: videoElement.paused,
+            loop: videoElement.loop
+          })
+          
+          autoplayIntervalRef.current = setTimeout(() => {
+            console.log(`🎬 [TIMER] Video timer expired, sliding to next`)
+            if (lightboxRef.current) {
+              lightboxRef.current.nextSlide()
+            }
+          }, duration * 1000)
+        } else {
+          console.log(`🎬 [TIMER] Video slide but no visible video element found, using 10s fallback`)
+          autoplayIntervalRef.current = setTimeout(() => {
+            console.log(`🎬 [TIMER] Fallback timer expired, sliding to next`)
+            if (lightboxRef.current) {
+              lightboxRef.current.nextSlide()
+            }
+          }, 10000)
+        }
+      } else {
+        // Bild-Slide - Timer für 10 Sekunden
+        console.log(`🎬 [TIMER] Image slide detected, setting timer for 10s`)
+        
+        autoplayIntervalRef.current = setTimeout(() => {
+          console.log(`🎬 [TIMER] Image timer expired, sliding to next`)
+          if (lightboxRef.current) {
+            lightboxRef.current.nextSlide()
+          }
+        }, 10000)
+      }
+    }
+  }
 
   // Media Files zu GLightbox Slides konvertieren
   useEffect(() => {
@@ -52,7 +133,7 @@ const SlideshowView: React.FC = () => {
       console.log(`🎬 [SLIDESHOW] Initializing GLightbox with ${slides.length} slides`)
       
       lightboxRef.current = GLightbox({
-        elements: slides,
+        elements: slides as any,
         autoplayVideos: true,
         loop: true,
         touchNavigation: true,
@@ -63,25 +144,25 @@ const SlideshowView: React.FC = () => {
         height: 'auto',
         videosWidth: '90vw',
         descPosition: 'bottom',
-        openEffect: 'zoom',
-        closeEffect: 'fade',
+        openEffect: 'none',
+        closeEffect: 'none',
         slideEffect: 'slide',
+        zoomable: false,
+        draggable: false,
         plyr: {
           config: {
             ratio: '16:9',
-            muted: true, // Immer stumm für Kiosk-Modus
-            hideControls: false, // Controls aktiviert für Autoplay
             autoplay: true,
-            loop: { active: true },
+            loop: { active: false }, // Loop deaktiviert!
             controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
             clickToPlay: false, // Verhindert Klick-zu-Play
             keyboard: { focused: false, global: false } // Deaktiviere Plyr Keyboard-Navigation
-          }
+          } as any
         }
-      })
+      } as any)
 
       // Event-Handler für GLightbox
-      lightboxRef.current.on('slide_after_load', (data: any) => {
+      lightboxRef.current.on('slide_after_load', () => {
         console.log(`🎬 [SLIDESHOW] Slide loaded, setting up video autoplay`)
         
         // Stelle sicher dass alle Videos stumm sind und simuliere Benutzerinteraktion
@@ -98,13 +179,37 @@ const SlideshowView: React.FC = () => {
           const currentVideo = document.querySelector('video')
           if (currentVideo && currentVideo.paused) {
             console.log(`🎬 [SLIDESHOW] Auto-playing video after slide load`)
-            currentVideo.play().catch(err => {
-              console.log(`🎬 [SLIDESHOW] Video autoplay failed, trying click simulation:`, err)
+            
+            // Auto-Slide läuft weiter - Videos werden trotzdem abgespielt
+            
+            currentVideo.play().catch(() => {
+              console.log(`🎬 [SLIDESHOW] Video autoplay failed, trying click simulation`)
               const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
               if (playButton) {
                 ;(playButton as HTMLElement).click()
               }
             })
+            
+            // Stelle sicher dass Video nicht loopt
+            currentVideo.loop = false
+            console.log(`🎬 [VIDEO] Video loop disabled:`, currentVideo.loop)
+            
+            // Video-Ende Event als Backup für Timer
+            currentVideo.addEventListener('ended', () => {
+              console.log(`🎬 [VIDEO] Video ended, forcing slide`)
+              setTimeout(() => {
+                if (lightboxRef.current) {
+                  lightboxRef.current.nextSlide()
+                }
+              }, 500)
+            }, { once: true })
+            
+            // Starte Timer für Video-Slide
+            console.log(`🎬 [VIDEO] Starting timer for video slide`)
+            setTimeout(() => startNextSlideTimer(), 1000)
+          } else {
+            // Kein Video: Auto-Slide läuft weiter
+            console.log(`🎬 [SLIDESHOW] Image slide, auto-slide continues`)
           }
           
           // Verstecke Plyr-Controls nach dem Laden
@@ -118,7 +223,7 @@ const SlideshowView: React.FC = () => {
       })
 
       // Event-Handler für Slide-Wechsel (für Videos) - verwende slide_before_change um Endlosschleife zu vermeiden
-      lightboxRef.current.on('slide_before_change', (data: any) => {
+      lightboxRef.current.on('slide_before_change', () => {
         console.log(`🎬 [SLIDESHOW] Slide changing, stopping all videos`)
         
         // Stoppe alle laufenden Videos und stelle sicher dass sie stumm sind
@@ -135,9 +240,27 @@ const SlideshowView: React.FC = () => {
         })
       })
       
+      // Event-Handler für Slide-Nach-Wechsel - starte neuen Timer
+      lightboxRef.current.on('slide_after_change', () => {
+        console.log(`🎬 [SLIDESHOW] Slide changed, starting new timer`)
+        setTimeout(() => startNextSlideTimer(), 500)
+      })
+      
+      // Zusätzlich: slide_after_load Event als Backup
+      lightboxRef.current.on('slide_after_load', () => {
+        console.log(`🎬 [SLIDESHOW] Slide loaded, starting timer as backup`)
+        setTimeout(() => startNextSlideTimer(), 1000)
+      })
+      
       // Automatisch die Slideshow starten
       console.log(`🎬 [SLIDESHOW] Opening GLightbox...`)
       lightboxRef.current.open()
+      
+      // Starte Autoplay nach kurzer Verzögerung
+      setTimeout(() => {
+        console.log(`🎬 [AUTOPLAY] Starting autoplay system`)
+        startNextSlideTimer()
+      }, 1000)
     }
   }, [slides])
 
@@ -222,7 +345,7 @@ const SlideshowView: React.FC = () => {
             console.log(`🎬 [KIOSK] Video autoplay successful after retry`)
             clearInterval(retryInterval)
           })
-          .catch((error) => {
+          .catch(() => {
             console.log(`🎬 [KIOSK] Autoplay retry failed, user interaction needed`)
           })
       }, 3000) // Retry every 3 seconds
@@ -275,6 +398,9 @@ const SlideshowView: React.FC = () => {
       opfsGLightboxAdapter.cleanup()
       if (lightboxRef.current) {
         lightboxRef.current.destroy()
+      }
+      if (autoplayIntervalRef.current) {
+        clearTimeout(autoplayIntervalRef.current)
       }
     }
   }, [])
@@ -356,12 +482,12 @@ const SlideshowView: React.FC = () => {
                   <h2 className="text-2xl font-bold text-gray-300 mb-4">
                     GLightbox Slideshow läuft
                   </h2>
-                  <p className="text-lg text-gray-500">
-                    {slides.length} Medien werden automatisch abgespielt
-                  </p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    Videos werden automatisch abgespielt und wiederholt
-                  </p>
+                          <p className="text-lg text-gray-500">
+                            {slides.length} Medien im Karussell-Modus
+                          </p>
+                          <p className="text-sm text-gray-400 mt-2">
+                            Bilder: 10 Sekunden • Videos: bis zum Ende • Intelligenter Autoplay
+                          </p>
                 </div>
               </div>
             ) : (
@@ -399,9 +525,9 @@ const SlideshowView: React.FC = () => {
           <span className="bg-gray-800 px-2 py-1 rounded text-yellow-400 font-mono">← →</span> Navigation • 
           <span className="bg-gray-800 px-2 py-1 rounded text-yellow-400 font-mono ml-2">L</span> Zurück zur Übersicht
         </p>
-        <p className="text-sm text-gray-500 mt-1">
-          Slideshow läuft automatisch • Videos werden endlos wiederholt
-        </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Bilder: 10 Sekunden • Videos: bis zum Ende • Intelligenter Autoplay • Karussell-Modus
+                </p>
       </div>
     </div>
   )

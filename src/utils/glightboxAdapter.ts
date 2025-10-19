@@ -21,21 +21,17 @@ export class OPFSGLightboxAdapter {
    * Konvertiert MediaFile Array zu GLightbox Slides
    */
   async convertToSlides(mediaFiles: MediaFile[]): Promise<GLightboxSlide[]> {
-    console.log(`🎬 [GLIGHTBOX] Converting ${mediaFiles.length} media files to slides`)
-    
     const slides: GLightboxSlide[] = []
     
     for (const mediaFile of mediaFiles) {
       try {
         const slide = await this.createSlideFromMediaFile(mediaFile)
         slides.push(slide)
-        console.log(`✅ [GLIGHTBOX] Created slide for: ${mediaFile.name}`)
       } catch (error) {
         console.error(`❌ [GLIGHTBOX] Failed to create slide for ${mediaFile.name}:`, error)
       }
     }
     
-    console.log(`🎬 [GLIGHTBOX] Successfully converted ${slides.length} slides`)
     return slides
   }
 
@@ -43,8 +39,6 @@ export class OPFSGLightboxAdapter {
    * Erstellt einen GLightbox Slide aus einem MediaFile
    */
   private async createSlideFromMediaFile(mediaFile: MediaFile): Promise<GLightboxSlide> {
-    console.log(`🎬 [GLIGHTBOX] Creating slide for: ${mediaFile.name} (type: ${mediaFile.type})`)
-    
     if (!mediaFile.localPath) {
       throw new Error(`No local path for media file: ${mediaFile.name}`)
     }
@@ -64,8 +58,6 @@ export class OPFSGLightboxAdapter {
     }
     const objectUrl = URL.createObjectURL(originalFile)
     
-    console.log(`🎬 [GLIGHTBOX] Created object URL: ${objectUrl} for ${mediaFile.name}`)
-    
     // Object URL für Cleanup speichern
     this.objectUrls.add(objectUrl)
 
@@ -80,47 +72,18 @@ export class OPFSGLightboxAdapter {
 
     // Video-spezifische Konfiguration
     if (mediaFile.type === 'video') {
-      console.log(`🎬 [GLIGHTBOX] Configuring video slide for: ${mediaFile.name}`)
       slide.width = '90vw'
       slide.height = 'auto'
-      console.log(`🎬 [GLIGHTBOX] Video slide configured:`, slide)
-    }
-
-    // Bild-spezifische Konfiguration
-    if (mediaFile.type === 'image') {
-      console.log(`🎬 [GLIGHTBOX] Image slide configured:`, slide)
     }
 
     return slide
   }
 
-  /**
-   * Formatiert Dateigröße für Anzeige
-   */
-  private formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${Math.round(bytes / Math.pow(k, i) * 100) / 100} ${sizes[i]}`
-  }
-
-  /**
-   * Gibt lesbaren Dateityp zurück
-   */
-  private getFileTypeLabel(type: string): string {
-    switch (type) {
-      case 'image': return 'Bild'
-      case 'video': return 'Video'
-      default: return 'Datei'
-    }
-  }
 
   /**
    * Bereinigt alle erstellten Object URLs
    */
   cleanup(): void {
-    console.log(`🧹 [GLIGHTBOX] Cleaning up ${this.objectUrls.size} object URLs`)
     this.objectUrls.forEach(url => {
       URL.revokeObjectURL(url)
     })

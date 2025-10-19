@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { useAppStore } from './stores/appStore'
 import LocationSelectionView from './components/LocationSelectionView'
 import SlideshowView from './components/SlideshowView'
@@ -10,7 +10,7 @@ function App() {
   useEffect(() => {
     console.log(`🚀 [APP] Component mounted, initializing...`)
     initializeApp()
-  }, [initializeApp])
+  }, []) // Empty dependency array - only run once on mount
 
   // Show slideshow if location is selected, otherwise show location selection
   if (selectedLocation) {

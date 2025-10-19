@@ -52,6 +52,9 @@ interface SchedulerConfig {
 }
 
 interface AppState {
+  // App state
+  isInitialized: boolean
+  
   // Location state
   selectedLocation: string | null
   availableLocations: string[]
@@ -109,8 +112,9 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       // Initial state
+      isInitialized: false,
       selectedLocation: null,
-      availableLocations: ['Flieden', 'Fulda', 'Kassel', 'Marburg'], // Hardcoded for now
+      availableLocations: ['Flieden', 'Neuhof', 'Gersfeld', 'Schlitz', 'Eichenzell'], // Hardcoded for now
       mediaFiles: [],
       currentIndex: 0,
       isPlaying: false,
@@ -418,7 +422,7 @@ export const useAppStore = create<AppState>()(
                     }
                     
                     localFiles.push(localFile)
-                    console.log(`📄 [SYNC] Found local file: ${mediaFile.localPath} (${originalFile.size} bytes, modified: ${originalFile.lastModified})`)
+                    // Found local file - no need to log every single file
                   } else {
                     console.log(`⚠️ [SYNC] Local file is null: ${mediaFile.localPath}`)
                   }
@@ -473,7 +477,7 @@ export const useAppStore = create<AppState>()(
             } else {
               // File is up to date
               actions.unchanged.push(driveFile)
-              console.log(`✅ [SYNC] Unchanged: ${driveFile.name}`)
+              // File is up to date - no need to log every unchanged file
             }
           }
         }
@@ -530,26 +534,32 @@ export const useAppStore = create<AppState>()(
       
       // App initialization
       initializeApp: async () => {
+        const { isInitialized } = get()
+        if (isInitialized) {
+          console.log(`🚀 [APP] Already initialized, skipping`)
+          return
+        }
+        
         console.log(`🚀 [APP] Initializing application`)
         
         const { selectedLocation, schedulerConfig } = get()
         
         if (selectedLocation) {
           console.log(`🏢 [APP] Found saved location: ${selectedLocation}`)
-          console.log(`🔄 [APP] Auto-syncing media for saved location`)
           
           // Auto-sync the saved location
           await get().syncLocationMedia(selectedLocation)
           
           // Start scheduler if enabled
           if (schedulerConfig.enabled) {
-            console.log(`⏰ [APP] Starting scheduler for saved location`)
             get().startScheduler()
           }
         } else {
           console.log(`🏢 [APP] No saved location found`)
         }
         
+        // Mark as initialized
+        set({ isInitialized: true })
         console.log(`✅ [APP] Application initialization complete`)
       },
       
@@ -605,7 +615,7 @@ export const useAppStore = create<AppState>()(
       },
 
       startScheduler: () => {
-        console.log(`⏰ [SCHEDULER] Starting scheduler`)
+        // Starting scheduler - no need to log every start
         
         const { schedulerConfig, selectedLocation } = get()
         
@@ -629,7 +639,7 @@ export const useAppStore = create<AppState>()(
             return
           }
           
-          console.log(`⏰ [SCHEDULER] Executing scheduled sync for ${selectedLocation}`)
+          // Scheduled sync - no need to log every execution
           await get().syncLocationMedia(selectedLocation)
           
           // Update next sync time
@@ -651,11 +661,11 @@ export const useAppStore = create<AppState>()(
           }
         }))
         
-        console.log(`⏰ [SCHEDULER] Scheduler started with ${schedulerConfig.interval} interval`)
+        console.log(`⏰ [SCHEDULER] Started with ${schedulerConfig.interval} interval`)
       },
 
       stopScheduler: () => {
-        console.log(`⏰ [SCHEDULER] Stopping scheduler`)
+        // Stopping scheduler - no need to log every stop
         
         const { schedulerConfig } = get()
         
