@@ -29,6 +29,16 @@ const SlideshowView: React.FC = () => {
     const currentVideo = document.querySelector('video')
     if (!currentVideo) return
     
+    console.log(`🎬 Setup video: currentTime = ${currentVideo.currentTime}`)
+    
+    // Nur auf 0 setzen wenn Video NICHT bereits am Anfang ist (< 0.5 Sekunden)
+    // Das verhindert Stutter da slide_before_change das Video bereits auf 0 gesetzt hat
+    if (currentVideo.currentTime > 0.5) {
+      console.log(`🎬 Video not at start, resetting to 0`)
+      currentVideo.pause()
+      currentVideo.currentTime = 0
+    }
+    
     currentVideo.loop = false
     currentVideo.muted = true
     currentVideo.volume = 0
@@ -51,6 +61,7 @@ const SlideshowView: React.FC = () => {
     currentVideo.addEventListener('ended', endedHandler)
     
     // Video abspielen
+    console.log(`🎬 Playing video from ${currentVideo.currentTime}`)
     if (currentVideo.paused) {
       currentVideo.play().catch(() => {
         const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
@@ -216,15 +227,14 @@ const SlideshowView: React.FC = () => {
         clearTimeout(imageTimerRef.current)
       }
       
-      // Stoppe alle laufenden Videos
+      // Stoppe ALLE Videos und setze sie auf Anfang zurück
       const allVideos = document.querySelectorAll('video')
       allVideos.forEach(video => {
-        if (!video.paused) {
-          video.pause()
-          video.currentTime = 0
-        }
+        video.pause()
+        video.currentTime = 0  // Immer auf 0 setzen, auch wenn pausiert
         video.muted = true
         video.volume = 0
+        console.log(`🔄 Reset video to 0 in slide_before_change`)
       })
     })
     
