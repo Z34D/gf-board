@@ -4,6 +4,7 @@
 Optimizing the GF Board kiosk application initialization and performance.
 
 ## Recent Changes
+- Fixed Chromium video first-frame flash during slide transitions
 - Fixed video sound playing initially by adding muted config to Plyr
 - Moved dev-server directory from src/ to root level to prevent build inclusion
 - Fixed autoSlide bug in SlideshowView
@@ -14,7 +15,24 @@ Optimizing the GF Board kiosk application initialization and performance.
 
 ## Recent Implementation Details
 
-### Dev-Server Directory Move (Latest)
+### Chromium Video Flash Fix + Event Cleanup (Latest)
+- **Issue**: In Chromium, videos showed first frame during slide-away transition + duplicate timer starts
+- **Root Cause**: 
+  - `video.currentTime = 0` was set in `slide_before_change` while video still visible during transition
+  - Manual setup in `goToNextSlide()` + `slide_changed` event both started timers (duplicate)
+- **Solution**: 
+  - Split pause and reset logic:
+    - `slide_before_change`: Only pause video (using `prev.slideNode.querySelector`)
+    - `slide_changed`: Reset `currentTime = 0` after transition completes
+  - Remove manual setup from `goToNextSlide()`, rely on events
+- **Changes Made**:
+  - Refactored `slide_before_change` to use GLightbox event data (`prev.slideNode`)
+  - Moved video reset logic to `slide_changed` event
+  - Removed `querySelectorAll('video')` in favor of event-specific video reference
+  - Removed duplicate manual setup setTimeout from `goToNextSlide()`
+- **Result**: No more first-frame flash in Chromium, no duplicate timers, cleaner event-driven architecture
+
+### Dev-Server Directory Move
 - **Issue**: dev-server directory was inside src/ and would be included in build
 - **Solution**: Moved dev-server/ from src/ to root level
 - **Changes Made**:

@@ -86,21 +86,9 @@ const SlideshowView: React.FC = () => {
     
     console.log(`🔍 Current: ${currentIndex}, Next: ${nextIndex}, Total: ${slides.length}`)
     
-    // goToSlide() ist die richtige Methode für Navigation
+    // goToSlide() triggert slide_changed Event, welches den Timer/Video-Setup übernimmt
     console.log(`➡️ Using goToSlide(${nextIndex})`)
     lightboxRef.current.goToSlide(nextIndex)
-    
-    // Manuell Setup nach Slide-Wechsel (weil Events nicht zuverlässig sind)
-    setTimeout(() => {
-      const newSlide = slides[nextIndex]
-      console.log(`🔧 Manual setup for slide ${nextIndex + 1}/${slides.length}, type: ${newSlide?.type}`)
-      
-      if (newSlide?.type === 'image') {
-        startImageTimer()
-      } else if (newSlide?.type === 'video') {
-        setupVideo()
-      }
-    }, TIMER_DELAY_AFTER_CHANGE)
   }
 
   // Hilfsfunktion: Zum vorherigen Slide mit manuellem Loop
@@ -222,29 +210,39 @@ const SlideshowView: React.FC = () => {
 
     // Event: Slide wechselt (vorher)
     lightboxRef.current.on('slide_before_change', (data: any) => {
-      console.log(`🔔 slide_before_change: ${data.prev.slideIndex + 1} → ${data.current.slideIndex + 1}`)
+      const { prev, current } = data
+      console.log(`🔔 slide_before_change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
       
       // Stoppe Image-Timer
       if (imageTimerRef.current) {
         clearTimeout(imageTimerRef.current)
       }
       
-      // Stoppe ALLE Videos und setze sie auf Anfang zurück
-      const allVideos = document.querySelectorAll('video')
-      allVideos.forEach(video => {
-        video.pause()
-        video.currentTime = 0  // Immer auf 0 setzen, auch wenn pausiert
-        video.muted = true
-        video.volume = 0
-        console.log(`🔄 Reset video to 0 in slide_before_change`)
-      })
+      // Pausiere PREV Video (falls vorhanden), aber setze es NICHT zurück
+      // Das verhindert den "first frame flash" in Chromium während der Slide-Transition
+      const prevVideo = prev.slideNode?.querySelector('video')
+      if (prevVideo) {
+        prevVideo.pause()
+        prevVideo.muted = true
+        prevVideo.volume = 0
+        console.log(`⏸️ Pausing prev video (not resetting yet - prevents flash)`)
+      }
     })
     
     // Event: Slide gewechselt (nachher)
-    lightboxRef.current.on('slide_after_change', (data: any) => {
-      console.log(`🔔 slide_after_change: ${data.prev.slideIndex + 1} → ${data.current.slideIndex + 1}`)
+    lightboxRef.current.on('slide_changed', (data: any) => {
+      const { prev, current } = data
+      console.log(`🔔 slide_changed: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
       
-      const currentIndex = data.current.slideIndex
+      // Jetzt ist PREV Slide nicht mehr sichtbar → Video zurücksetzen
+      // Das passiert NACH der Slide-Transition, daher kein "first frame flash"
+      const prevVideo = prev.slideNode?.querySelector('video')
+      if (prevVideo) {
+        prevVideo.currentTime = 0
+        console.log(`🔄 Reset prev video to 0 (now hidden, no flash)`)
+      }
+      
+      const currentIndex = current.slideIndex
       const currentSlide = slides[currentIndex]
       
       console.log(`📍 Slide changed to ${currentIndex + 1}/${slides.length}, type: ${currentSlide?.type}`)
