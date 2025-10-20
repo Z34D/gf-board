@@ -95,3 +95,8 @@ input, textarea {
 .plyr__progress {
   display: none !important;
 }
+
+/* Hide GLightbox loader spinner */
+.gloader {
+  display: none !important;
+}

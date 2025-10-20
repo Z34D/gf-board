@@ -8,8 +8,6 @@ import 'glightbox/dist/css/glightbox.css'
 
 // Konstanten
 const IMAGE_DISPLAY_DURATION = 10000 // 10 Sekunden
-const VIDEO_MUTE_DELAY = 200 // 0.2 Sekunden
-const CONTROLS_HIDE_DELAY = 500 // 0.5 Sekunden
 const VIDEO_END_SLIDE_DELAY = 500 // 0.5 Sekunden
 
 const SlideshowView: React.FC = () => {
@@ -22,6 +20,7 @@ const SlideshowView: React.FC = () => {
   const lightboxRef = useRef<any>(null)
   const [slides, setSlides] = useState<GLightboxSlide[]>([])
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const loadedSlidesRef = useRef<Set<number>>(new Set())
 
   // Hilfsfunktion: Setup für Video (ended event)
   const setupVideo = () => {
@@ -177,34 +176,27 @@ const SlideshowView: React.FC = () => {
       }
     } as any)
 
-    // Event: Slide geladen
+    // Event: Slide geladen (nur einmal pro Slide)
     lightboxRef.current.on('slide_after_load', () => {
       const currentIndex = lightboxRef.current.index || 0
       const currentSlide = slides[currentIndex]
       
-      console.log(`🔔 Slide loaded: ${currentIndex + 1}/${slides.length} (${currentSlide?.type})`)
+      // Verhindere duplicate slide_after_load Events
+      if (loadedSlidesRef.current.has(currentIndex)) {
+        return
+      }
+      loadedSlidesRef.current.add(currentIndex)
       
       if (currentSlide?.type === 'video') {
         // Video-Handling: Zentrale setupVideo() Funktion verwenden
-        setTimeout(() => {
-          setupVideo()
-          
-          // Plyr-Controls verstecken
-          setTimeout(() => {
-            const plyrControls = document.querySelectorAll('.plyr__controls')
-            plyrControls.forEach(control => {
-              (control as HTMLElement).style.display = 'none'
-            })
-          }, CONTROLS_HIDE_DELAY)
-        }, VIDEO_MUTE_DELAY)
+        setupVideo()
       }
       // Timer wird durch slide_changed Event gestartet
     })
 
     // Event: Slide wechselt (vorher)
     lightboxRef.current.on('slide_before_change', (data: any) => {
-      const { prev, current } = data
-      console.log(`🔔 Before change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
+      const { prev } = data
       
       // Stoppe Image-Timer
       if (imageTimerRef.current) {
@@ -218,27 +210,24 @@ const SlideshowView: React.FC = () => {
         prevVideo.pause()
         prevVideo.muted = true
         prevVideo.volume = 0
-        console.log(`⏸️ Video paused (reset delayed to prevent flash)`)
+        console.log(`⏸️ Video paused`)
       }
     })
     
     // Event: Slide gewechselt (nachher)
     lightboxRef.current.on('slide_changed', (data: any) => {
       const { prev, current } = data
-      console.log(`🔔 After change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
       
       // Jetzt ist PREV Slide nicht mehr sichtbar → Video zurücksetzen
       // Das passiert NACH der Slide-Transition, daher kein "first frame flash"
       const prevVideo = prev.slideNode?.querySelector('video')
       if (prevVideo) {
         prevVideo.currentTime = 0
-        console.log(`🔄 Video reset (hidden, no flash)`)
+        console.log(`🔄 Video reset`)
       }
       
       const currentIndex = current.slideIndex
       const currentSlide = slides[currentIndex]
-      
-      console.log(`📍 Now showing: ${currentIndex + 1}/${slides.length} (${currentSlide?.type})`)
       
       // Timer für Bilder starten (ohne setTimeout um Duplikate zu vermeiden)
       if (currentSlide?.type === 'image') {
