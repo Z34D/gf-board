@@ -1,13 +1,41 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GF-Board</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+	<meta charset="UTF-8" />
+	<link rel="icon" type="image/svg+xml" href="/vite.svg" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>GF-Board</title>
+
+	<!-- Midnight Page Reload Script - Runs independently of React -->
+	<script>
+		(function () {
+			function scheduleNextReload() {
+				const now = new Date();
+				const midnight = new Date();
+				midnight.setHours(24, 0, 0, 0); // Next midnight
+
+				const msUntilMidnight = midnight.getTime() - now.getTime();
+
+				console.log(`[Auto-Reload] Nächster Reload geplant für: ${midnight.toLocaleString('de-DE')}`);
+
+				setTimeout(function () {
+					console.log('[Auto-Reload] Führe Midnight-Reload durch...');
+					window.location.reload(true); // Force reload from server
+				}, msUntilMidnight);
+			}
+
+			// Start scheduling on page load
+			scheduleNextReload();
+
+			console.log('[Auto-Reload] Midnight reload scheduler initialized');
+		})();
+	</script>
+</head>
+
+<body>
+	<div id="root"></div>
+	<script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>
