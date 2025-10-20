@@ -4,7 +4,7 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "bun --watch src/dev-server/dev.ts",
+		"dev": "bun --watch dev-server/dev.ts",
 		"build": "tsc -b && vite build",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
@@ -13,6 +13,8 @@
 	},
 	"dependencies": {
 		"@tailwindcss/vite": "^4.1.14",
+		"@tanstack/react-router": "^1.133.15",
+		"@tanstack/router-plugin": "^1.133.15",
 		"glightbox": "^3.3.1",
 		"hono": "^4.10.1",
 		"opfs-tools": "^0.7.2",

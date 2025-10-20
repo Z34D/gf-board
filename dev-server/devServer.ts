@@ -8,6 +8,21 @@ async function main() {
   const kv = new LocalKV();
   await kv.init();
 
+  // Initialize KV with default auth values if not present
+  const existingPin = await kv.get('kiosk_pin');
+  if (!existingPin) {
+    await kv.put('kiosk_pin', '1234');
+    console.log('🔑 Initialized default PIN: 1234');
+  }
+  
+  const existingSecret = await kv.get('jwt_secret');
+  if (!existingSecret) {
+    // Generate a random JWT secret for dev
+    const secret = 'dev-secret-' + Math.random().toString(36).substring(2, 15);
+    await kv.put('jwt_secret', secret);
+    console.log('🔐 Initialized JWT secret');
+  }
+
   // Einfacher Fetcher, der statische Anfragen zur Vite-Dev-Server weiterleitet
   const ASSETS = {
     async fetch(input: RequestInfo, init?: RequestInit) {
@@ -23,11 +38,11 @@ async function main() {
   };
 
   const env: { 
-    MY_OVERLOAD_KV: LocalKV; 
+    GF_KIOSK_KV: LocalKV; 
     ASSETS: { fetch: (req: Request) => Promise<Response> };
     GOOGLE_DRIVE_API_KEY: string;
   } = { 
-    MY_OVERLOAD_KV: kv, 
+    GF_KIOSK_KV: kv, 
     ASSETS,
     GOOGLE_DRIVE_API_KEY: 'REDACTED_GOOGLE_API_KEY'
   };

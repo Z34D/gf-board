@@ -73,6 +73,6 @@ export class LocalKV {
 }
 
 export type LocalEnv = {
-  MY_OVERLOAD_KV: LocalKV;
+  GF_KIOSK_KV: LocalKV;
   ASSETS: { fetch: (input: RequestInfo, init?: RequestInit) => Promise<Response> };
 };
