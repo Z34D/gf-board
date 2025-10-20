@@ -4,6 +4,7 @@
 Optimizing the GF Board kiosk application initialization and performance.
 
 ## Recent Changes
+- Fixed video sound playing initially by adding muted config to Plyr
 - Moved dev-server directory from src/ to root level to prevent build inclusion
 - Fixed autoSlide bug in SlideshowView
 - Separated timer logic: images use timer, videos use 'ended' event
@@ -23,6 +24,12 @@ Optimizing the GF Board kiosk application initialization and performance.
 - **Result**: Dev server files no longer included in build output, cleaner project structure
 
 ## Bug Fix Details
+
+### Video Sound Fix (Latest)
+- **Issue**: Videos played with sound initially before mute settings were applied
+- **Root Cause**: Plyr autoplay started before setupVideo() setTimeout could mute the video
+- **Solution**: Added `muted: true` and `volume: 0` to Plyr config in GLightbox initialization
+- **Result**: Videos are now muted from the very start, no initial sound playback
 
 ### AutoSlide Fix
 - **Issue**: Images didn't advance after 10s, videos had unreliable timing

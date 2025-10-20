@@ -184,6 +184,8 @@ const SlideshowView: React.FC = () => {
         config: {
           ratio: '16:9',
           autoplay: true,
+          muted: true,
+          volume: 0,
           loop: { active: false },
           controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
           clickToPlay: false,

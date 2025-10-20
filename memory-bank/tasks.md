@@ -1,16 +1,14 @@
 # Tasks
 
-## Current Task: Move dev-server out of src directory
+## Current Task: Fix video sound playing initially
 Status: Completed
 
 ### Subtasks
-- [X] Move dev-server directory from src/ to root level
-- [X] Update import paths in dev.ts
-- [X] Update import paths in devServer.ts  
-- [X] Update storage file path in localKV.ts
-- [X] Verify dev-server still works after move
+- [X] Add muted: true to Plyr config
+- [X] Add volume: 0 to Plyr config
 
 ## Completed Tasks
+- [X] Fixed video sound playing initially - Completed on 2025-10-20
 - [X] Project analysis and setup - Completed on 2025-01-19
 - [X] Memory Bank structure creation - Completed on 2025-01-19
 - [X] Fixed duplicate initialization issue - Completed on 2025-10-19
