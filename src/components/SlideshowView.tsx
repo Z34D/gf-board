@@ -8,8 +8,6 @@ import 'glightbox/dist/css/glightbox.css'
 
 // Konstanten
 const IMAGE_DISPLAY_DURATION = 10000 // 10 Sekunden
-const TIMER_DELAY_AFTER_LOAD = 1000 // 1 Sekunde
-const TIMER_DELAY_AFTER_CHANGE = 500 // 0.5 Sekunden
 const VIDEO_MUTE_DELAY = 200 // 0.2 Sekunden
 const CONTROLS_HIDE_DELAY = 500 // 0.5 Sekunden
 const VIDEO_END_SLIDE_DELAY = 500 // 0.5 Sekunden
@@ -17,7 +15,8 @@ const VIDEO_END_SLIDE_DELAY = 500 // 0.5 Sekunden
 const SlideshowView: React.FC = () => {
   const { 
     clearSelectedLocation, 
-    mediaFiles
+    mediaFiles,
+    syncStatus
   } = useAppStore()
   
   const lightboxRef = useRef<any>(null)
@@ -29,12 +28,12 @@ const SlideshowView: React.FC = () => {
     const currentVideo = document.querySelector('video')
     if (!currentVideo) return
     
-    console.log(`🎬 Setup video: currentTime = ${currentVideo.currentTime}`)
+    console.log(`🎬 Video setup: currentTime=${currentVideo.currentTime.toFixed(2)}s`)
     
     // Nur auf 0 setzen wenn Video NICHT bereits am Anfang ist (< 0.5 Sekunden)
     // Das verhindert Stutter da slide_before_change das Video bereits auf 0 gesetzt hat
     if (currentVideo.currentTime > 0.5) {
-      console.log(`🎬 Video not at start, resetting to 0`)
+      console.log(`🎬 Video reset to start`)
       currentVideo.pause()
       currentVideo.currentTime = 0
     }
@@ -51,8 +50,7 @@ const SlideshowView: React.FC = () => {
     
     // Neuer Event Listener für Video-Ende
     const endedHandler = () => {
-      const currentIdx = lightboxRef.current?.index || 0
-      console.log(`🎬 Video ended at slide ${currentIdx + 1}/${slides.length}, calling goToNextSlide()`)
+      console.log(`🎬 Video ended → next slide`)
       setTimeout(() => goToNextSlide(), VIDEO_END_SLIDE_DELAY)
     }
     
@@ -61,7 +59,7 @@ const SlideshowView: React.FC = () => {
     currentVideo.addEventListener('ended', endedHandler)
     
     // Video abspielen
-    console.log(`🎬 Playing video from ${currentVideo.currentTime}`)
+    console.log(`🎬 Video playing`)
     if (currentVideo.paused) {
       currentVideo.play().catch(() => {
         const playButton = document.querySelector('.plyr__control--overlaid, .plyr__play')
@@ -74,20 +72,17 @@ const SlideshowView: React.FC = () => {
 
   // Hilfsfunktion: Zum nächsten Slide mit manuellem Loop
   const goToNextSlide = () => {
-    console.log(`🔍 goToNextSlide called - lightboxRef exists: ${!!lightboxRef.current}, slides: ${slides.length}`)
-    
     if (!lightboxRef.current || slides.length === 0) {
-      console.log('❌ goToNextSlide: lightboxRef or slides missing')
+      console.log('❌ Navigation blocked: no slides')
       return
     }
     
     const currentIndex = lightboxRef.current.index || 0
     const nextIndex = (currentIndex + 1) % slides.length // Modulo für automatischen Loop
     
-    console.log(`🔍 Current: ${currentIndex}, Next: ${nextIndex}, Total: ${slides.length}`)
+    console.log(`➡️ Navigate: ${currentIndex + 1} → ${nextIndex + 1} (of ${slides.length})`)
     
     // goToSlide() triggert slide_changed Event, welches den Timer/Video-Setup übernimmt
-    console.log(`➡️ Using goToSlide(${nextIndex})`)
     lightboxRef.current.goToSlide(nextIndex)
   }
 
@@ -118,9 +113,9 @@ const SlideshowView: React.FC = () => {
     
     // Timer nur für Bilder setzen
     if (currentSlide.type === 'image') {
-      console.log(`⏱️ Starting image timer for slide ${currentIndex + 1}/${slides.length}`)
+      console.log(`⏱️ Image timer started (${IMAGE_DISPLAY_DURATION / 1000}s)`)
       imageTimerRef.current = setTimeout(() => {
-        console.log(`⏱️ Image timer expired, calling goToNextSlide()`)
+        console.log(`⏱️ Image timer expired → next slide`)
         goToNextSlide()
       }, IMAGE_DISPLAY_DURATION)
     }
@@ -147,9 +142,9 @@ const SlideshowView: React.FC = () => {
     convertMediaToSlides()
   }, [mediaFiles])
 
-  // GLightbox initialisieren
+  // GLightbox initialisieren (nur wenn Sync abgeschlossen)
   useEffect(() => {
-    if (slides.length === 0 || lightboxRef.current) return
+    if (slides.length === 0 || lightboxRef.current || syncStatus.isSyncing) return
 
     lightboxRef.current = GLightbox({
       elements: slides as any,
@@ -187,7 +182,7 @@ const SlideshowView: React.FC = () => {
       const currentIndex = lightboxRef.current.index || 0
       const currentSlide = slides[currentIndex]
       
-      console.log(`🔔 slide_after_load fired: ${currentIndex + 1}/${slides.length}, type: ${currentSlide?.type}`)
+      console.log(`🔔 Slide loaded: ${currentIndex + 1}/${slides.length} (${currentSlide?.type})`)
       
       if (currentSlide?.type === 'video') {
         // Video-Handling: Zentrale setupVideo() Funktion verwenden
@@ -202,16 +197,14 @@ const SlideshowView: React.FC = () => {
             })
           }, CONTROLS_HIDE_DELAY)
         }, VIDEO_MUTE_DELAY)
-      } else {
-        // Bild-Handling: Timer starten
-        setTimeout(() => startImageTimer(), TIMER_DELAY_AFTER_LOAD)
       }
+      // Timer wird durch slide_changed Event gestartet
     })
 
     // Event: Slide wechselt (vorher)
     lightboxRef.current.on('slide_before_change', (data: any) => {
       const { prev, current } = data
-      console.log(`🔔 slide_before_change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
+      console.log(`🔔 Before change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
       
       // Stoppe Image-Timer
       if (imageTimerRef.current) {
@@ -225,49 +218,39 @@ const SlideshowView: React.FC = () => {
         prevVideo.pause()
         prevVideo.muted = true
         prevVideo.volume = 0
-        console.log(`⏸️ Pausing prev video (not resetting yet - prevents flash)`)
+        console.log(`⏸️ Video paused (reset delayed to prevent flash)`)
       }
     })
     
     // Event: Slide gewechselt (nachher)
     lightboxRef.current.on('slide_changed', (data: any) => {
       const { prev, current } = data
-      console.log(`🔔 slide_changed: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
+      console.log(`🔔 After change: ${prev.slideIndex + 1} → ${current.slideIndex + 1}`)
       
       // Jetzt ist PREV Slide nicht mehr sichtbar → Video zurücksetzen
       // Das passiert NACH der Slide-Transition, daher kein "first frame flash"
       const prevVideo = prev.slideNode?.querySelector('video')
       if (prevVideo) {
         prevVideo.currentTime = 0
-        console.log(`🔄 Reset prev video to 0 (now hidden, no flash)`)
+        console.log(`🔄 Video reset (hidden, no flash)`)
       }
       
       const currentIndex = current.slideIndex
       const currentSlide = slides[currentIndex]
       
-      console.log(`📍 Slide changed to ${currentIndex + 1}/${slides.length}, type: ${currentSlide?.type}`)
+      console.log(`📍 Now showing: ${currentIndex + 1}/${slides.length} (${currentSlide?.type})`)
       
-      // Timer nur für Bilder starten
-      if (currentSlide?.type === 'image') {
-        setTimeout(() => startImageTimer(), TIMER_DELAY_AFTER_CHANGE)
-      }
-      // Videos starten automatisch durch 'ended' Event
-    })
-    
-    // Slideshow starten
-    lightboxRef.current.open()
-    
-    // Initialer Timer-Start für erstes Slide (falls es ein Bild ist)
-    setTimeout(() => {
-      const currentIndex = lightboxRef.current?.index || 0
-      const currentSlide = slides[currentIndex]
-      
+      // Timer für Bilder starten (ohne setTimeout um Duplikate zu vermeiden)
       if (currentSlide?.type === 'image') {
         startImageTimer()
       }
-      // Videos starten automatisch durch 'ended' Event
-    }, TIMER_DELAY_AFTER_LOAD)
-  }, [slides])
+    })
+    
+    // Slideshow starten
+    // Events (slide_after_load + slide_changed) übernehmen Timer/Video-Setup
+    console.log(`✅ Slideshow ready, opening GLightbox`)
+    lightboxRef.current.open()
+  }, [slides, syncStatus.isSyncing])
 
   // Keyboard Handler
   useEffect(() => {
@@ -315,7 +298,15 @@ const SlideshowView: React.FC = () => {
 
   return (
     <div className="w-full h-screen bg-black">
-      {/* GLightbox übernimmt die komplette Anzeige */}
+      {syncStatus.isSyncing && (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-6xl font-bold tracking-tight italic">
+            <span className="text-white">GET</span>
+            <span className="text-red-600">FIT</span>
+          </div>
+        </div>
+      )}
+      {/* GLightbox übernimmt die komplette Anzeige nach Sync */}
     </div>
   )
 }

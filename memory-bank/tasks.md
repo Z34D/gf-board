@@ -1,12 +1,30 @@
 # Tasks
 
-## Current Task: Fix Chromium video first-frame flash
+## Current Task: Wait for sync completion before showing slideshow
+Status: Completed
+
+### Subtasks
+- [X] Add syncStatus to SlideshowView
+- [X] Prevent GLightbox initialization while syncing
+- [X] Add loading display during sync
+- [X] Only show slideshow after sync complete
+
+## Previous Task: Console log cleanup
+Status: Completed
+
+### Subtasks
+- [X] Clean up and standardize all console.log messages
+- [X] Make logs more concise and consistent
+- [X] Keep technical context but reduce verbosity
+
+## Previous Task: Fix Chromium video first-frame flash
 Status: Completed
 
 ### Subtasks
 - [X] Refactor slide_before_change to only pause video
 - [X] Add video reset logic to slide_changed event
 - [X] Use GLightbox event data (prev.slideNode) instead of querySelectorAll
+- [X] Remove duplicate manual setup from goToNextSlide
 - [X] Test fix in Chromium
 
 ## Previous Task: Fix video sound playing initially
@@ -17,6 +35,8 @@ Status: Completed
 - [X] Add volume: 0 to Plyr config
 
 ## Completed Tasks
+- [X] Wait for sync completion before showing slideshow - Completed on 2025-10-20
+- [X] Console log cleanup for better readability - Completed on 2025-10-20
 - [X] Fixed Chromium video first-frame flash during transitions - Completed on 2025-10-20
 - [X] Fixed video sound playing initially - Completed on 2025-10-20
 - [X] Project analysis and setup - Completed on 2025-01-19
