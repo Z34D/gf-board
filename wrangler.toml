@@ -16,5 +16,4 @@ not_found_handling = "single-page-application"
 
 [[kv_namespaces]]
 binding = "GF_KIOSK_KV"
-id = "placeholder_id"
-preview_id = "placeholder_preview_id"
+id = "ca140f8c7fdc408daa09b2f044fe6747"

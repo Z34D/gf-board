@@ -1,13 +1,15 @@
 # Tasks
 
-## Current Task: Wait for sync completion before showing slideshow
+## Current Task: Hide mouse cursor automatically in slideshow
 Status: Completed
 
 ### Subtasks
-- [X] Add syncStatus to SlideshowView
-- [X] Prevent GLightbox initialization while syncing
-- [X] Add loading display during sync
-- [X] Only show slideshow after sync complete
+- [X] Add cursor management functions (hideCursor, showCursor)
+- [X] Implement mouse movement detection to show cursor temporarily
+- [X] Add auto-hide timer for cursor after inactivity (3 seconds)
+- [X] Show cursor when keyboard navigation is used
+- [X] Hide cursor when slideshow starts
+- [X] Clean up cursor timeout on component unmount
 
 ## Previous Task: Console log cleanup
 Status: Completed
@@ -35,6 +37,7 @@ Status: Completed
 - [X] Add volume: 0 to Plyr config
 
 ## Completed Tasks
+- [X] Hide mouse cursor automatically in slideshow - Completed on 2025-01-20
 - [X] Wait for sync completion before showing slideshow - Completed on 2025-10-20
 - [X] Console log cleanup for better readability - Completed on 2025-10-20
 - [X] Fixed Chromium video first-frame flash during transitions - Completed on 2025-10-20

@@ -21,6 +21,26 @@ const SlideshowView: React.FC = () => {
   const [slides, setSlides] = useState<GLightboxSlide[]>([])
   const imageTimerRef = useRef<NodeJS.Timeout | null>(null)
   const loadedSlidesRef = useRef<Set<number>>(new Set())
+  const cursorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cursor management functions
+  const hideCursor = () => {
+    document.body.style.cursor = 'none'
+  }
+
+  const showCursor = () => {
+    document.body.style.cursor = 'default'
+    
+    // Clear existing timeout
+    if (cursorTimeoutRef.current) {
+      clearTimeout(cursorTimeoutRef.current)
+    }
+    
+    // Auto-hide cursor after 3 seconds
+    cursorTimeoutRef.current = setTimeout(() => {
+      hideCursor()
+    }, 3000)
+  }
 
   // Hilfsfunktion: Setup für Video (ended event)
   const setupVideo = () => {
@@ -143,7 +163,16 @@ const SlideshowView: React.FC = () => {
 
   // GLightbox initialisieren (nur wenn Sync abgeschlossen)
   useEffect(() => {
-    if (slides.length === 0 || lightboxRef.current || syncStatus.isSyncing) return
+    if (slides.length === 0 || syncStatus.isSyncing) return
+
+    // Destroy existing GLightbox instance if it exists
+    if (lightboxRef.current) {
+      console.log(`🔄 Re-initializing GLightbox with ${slides.length} slides`)
+      lightboxRef.current.destroy()
+      lightboxRef.current = null
+      // Reset loaded slides tracking for new instance
+      loadedSlidesRef.current.clear()
+    }
 
     lightboxRef.current = GLightbox({
       elements: slides as any,
@@ -239,12 +268,31 @@ const SlideshowView: React.FC = () => {
     // Events (slide_after_load + slide_changed) übernehmen Timer/Video-Setup
     console.log(`✅ Slideshow ready, opening GLightbox`)
     lightboxRef.current.open()
+    
+    // Hide cursor when slideshow starts
+    hideCursor()
   }, [slides, syncStatus.isSyncing])
+
+  // Mouse movement handler for cursor management
+  useEffect(() => {
+    const handleMouseMove = () => {
+      showCursor()
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+    }
+  }, [])
 
   // Keyboard Handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!lightboxRef.current) return
+      
+      // Show cursor when keyboard is used
+      showCursor()
       
       switch (e.key) {
         case 'ArrowLeft':
@@ -282,6 +330,11 @@ const SlideshowView: React.FC = () => {
       if (imageTimerRef.current) {
         clearTimeout(imageTimerRef.current)
       }
+      if (cursorTimeoutRef.current) {
+        clearTimeout(cursorTimeoutRef.current)
+      }
+      // Restore cursor when component unmounts
+      document.body.style.cursor = 'default'
     }
   }, [])
 

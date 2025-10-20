@@ -1,9 +1,11 @@
 # Active Context
 
 ## Current Focus
-Optimizing the GF Board kiosk application initialization and performance.
+Added automatic cursor hiding for cleaner kiosk experience - cursor hides during slideshow and shows temporarily on mouse movement or keyboard use.
 
 ## Recent Changes
+- Added automatic cursor hiding for cleaner kiosk experience
+- Fixed slideshow not updating after sync - now properly re-initializes GLightbox with new content
 - Slideshow now waits for sync completion before starting
 - Cleaned up and standardized console logs for better clarity
 - Fixed Chromium video first-frame flash during slide transitions
@@ -17,7 +19,31 @@ Optimizing the GF Board kiosk application initialization and performance.
 
 ## Recent Implementation Details
 
-### Sync-Aware Slideshow Initialization (Latest)
+### Automatic Cursor Hiding (Latest)
+- **Issue**: Mouse cursor visible during slideshow creates distraction in kiosk environment
+- **Solution**: Implement intelligent cursor hiding with temporary show on interaction
+- **Changes Made**:
+  - Added `cursorTimeoutRef` for managing auto-hide timer
+  - Created `hideCursor()` and `showCursor()` functions
+  - Added mouse movement detection to temporarily show cursor
+  - Added keyboard event detection to show cursor during navigation
+  - Implemented 3-second auto-hide timer after cursor becomes visible
+  - Hide cursor when slideshow starts
+  - Restore cursor to default when component unmounts
+- **Result**: Clean kiosk experience with cursor hidden by default, showing temporarily on user interaction
+
+### Slideshow Update Bug Fix
+- **Issue**: Slideshow showed old content after sync despite console showing new files were synced
+- **Root Cause**: GLightbox instance was created once and never re-initialized when slides changed
+- **Solution**: Destroy existing GLightbox instance and re-initialize when slides change
+- **Changes Made**:
+  - Removed `lightboxRef.current` check that prevented re-initialization
+  - Added GLightbox destroy logic before creating new instance
+  - Reset `loadedSlidesRef.current.clear()` to prevent duplicate events
+  - Added console log for re-initialization tracking
+- **Result**: Slideshow now properly updates with new content immediately after sync
+
+### Sync-Aware Slideshow Initialization
 - **Issue**: Slideshow started before sync was complete, showing partial/old content
 - **Solution**: Check `syncStatus.isSyncing` before initializing GLightbox
 - **Changes Made**:
