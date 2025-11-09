@@ -66,14 +66,14 @@ export class OPFSGLightboxAdapter {
       type: mediaFile.type,
       title: undefined, // Keine Titel/Captions
       description: undefined, // Keine Beschreibungen
-      width: '90vw',
-      height: 'auto'
+      width: '100vw',
+      height: '100vh'
     }
 
     // Video-spezifische Konfiguration
     if (mediaFile.type === 'video') {
-      slide.width = '90vw'
-      slide.height = 'auto'
+      slide.width = '100vw'
+      slide.height = '100vh'
     }
 
     return slide

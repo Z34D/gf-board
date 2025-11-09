@@ -182,9 +182,9 @@ const SlideshowView: React.FC = () => {
       keyboardNavigation: true,
       closeOnOutsideClick: false,
       closeButton: false,
-      width: '90vw',
-      height: 'auto',
-      videosWidth: '90vw',
+      width: '100vw',
+      height: '100vh',
+      videosWidth: '100vw',
       descPosition: 'bottom',
       openEffect: 'none',
       closeEffect: 'none',
@@ -193,7 +193,6 @@ const SlideshowView: React.FC = () => {
       draggable: false,
       plyr: {
         config: {
-          ratio: '16:9',
           autoplay: true,
           muted: true,
           volume: 0,
