@@ -28,6 +28,7 @@ export interface MediaFile {
   localPath?: string
   lastModified?: string
   localLastModified?: Date
+  videoDuration?: number  // Duration in seconds for videos
 }
 
 interface SyncActions {

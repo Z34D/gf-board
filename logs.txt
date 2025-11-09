@@ -1,28 +1,51 @@
-🚀 Init: Gersfeld
-appStore.ts:179 🔄 Syncing: Gersfeld
-2glightboxAdapter.ts:117 📊 Video duration measured: 5.0s
-2glightboxAdapter.ts:117 📊 Video duration measured: 183.0s
-2glightboxAdapter.ts:117 📊 Video duration measured: 10.0s
-appStore.ts:268 ✅ Sync complete: ✓4 unchanged | Total: 4 files
-SlideshowView.tsx:67 📊 Slide 0: Get_Fit_Opening_FHD.mp4 | 5.0s
-SlideshowView.tsx:67 📊 Slide 1: Gersfeld_FHD.mp4 | 183.0s
-SlideshowView.tsx:67 📊 Slide 2: Vitaminversand_Ipster_FHD.mp4 | 10.0s
-SlideshowView.tsx:67 📊 Slide 3: Coaching Ipster.png | 10.0s
-SlideshowView.tsx:93 🎬 GLightbox object created: t2 {customOptions: {…}, settings: {…}, effectsClasses: 'gfadeIn gfadeOut gzoomIn gzoomOut gslideInRight gs…deOutLeft gslideInLeft gslideOutRight gnone gnone', videoPlayers: {…}, apiEvents: Array(0), …}
-SlideshowView.tsx:119 ✅ GLightbox initialized with 4 slides
-SlideshowView.tsx:120 🎬 Calling lightboxRef.current.open()...
-SlideshowView.tsx:123 ✅ GLightbox.open() successful
-appStore.ts:556 ⏰ Scheduler: 4hours
-glightboxAdapter.ts:117 📊 Video duration measured: 5.0s
-glightboxAdapter.ts:117 📊 Video duration measured: 183.0s
-glightboxAdapter.ts:117 📊 Video duration measured: 10.0s
-SlideshowView.tsx:67 📊 Slide 0: Get_Fit_Opening_FHD.mp4 | 5.0s
-SlideshowView.tsx:67 📊 Slide 1: Gersfeld_FHD.mp4 | 183.0s
-SlideshowView.tsx:67 📊 Slide 2: Vitaminversand_Ipster_FHD.mp4 | 10.0s
-SlideshowView.tsx:67 📊 Slide 3: Coaching Ipster.png | 10.0s
-SlideshowView.tsx:93 🎬 GLightbox object created: t2 {customOptions: {…}, settings: {…}, effectsClasses: 'gfadeIn gfadeOut gzoomIn gzoomOut gslideInRight gs…deOutLeft gslideInLeft gslideOutRight gnone gnone', videoPlayers: {…}, apiEvents: Array(0), …}
-SlideshowView.tsx:119 ✅ GLightbox initialized with 4 slides
-SlideshowView.tsx:120 🎬 Calling lightboxRef.current.open()...
-SlideshowView.tsx:123 ✅ GLightbox.open() successful
-SlideshowView.tsx:110 ⏱️ Slide 0: 5.0s
-SlideshowView.tsx:110 ⏱️ Slide 0: 5.0s
+⚠️ No blob URL for Get_Fit_Opening_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Gersfeld_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Vitaminversand_Ipster_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Coaching Ipster.png, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Get_Fit_Opening_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Gersfeld_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Vitaminversand_Ipster_FHD.mp4, using fallback SlideshowView.tsx:21:17
+⚠️ No blob URL for Coaching Ipster.png, using fallback SlideshowView.tsx:21:17
+🔄 [STATE] IDLE useSlideshowMachine.ts:41:13
+🚀 Init: Gersfeld appStore.ts:463:19
+🔄 Syncing: Gersfeld appStore.ts:180:17
+🔄 [STATE] IDLE useSlideshowMachine.ts:41:13
+🔄 [STATE] LOADING useSlideshowMachine.ts:41:13
+✅ Created blob URL for Get_Fit_Opening_FHD.mp4 2 useMediaBlobUrls.ts:51:19
+✅ Created blob URL for Gersfeld_FHD.mp4 2 useMediaBlobUrls.ts:51:19
+✅ Created blob URL for Vitaminversand_Ipster_FHD.mp4 2 useMediaBlobUrls.ts:51:19
+✅ Created blob URL for Coaching Ipster.png 2 useMediaBlobUrls.ts:51:19
+✅ All blob URLs ready, transitioning to READY state useSlideshowMachine.ts:56:17
+🔄 [STATE] READY useSlideshowMachine.ts:41:13
+🔄 [STATE] PLAYING useSlideshowMachine.ts:41:13
+
+📺 [PLAYING] Slide 0 (video) useSlideshowMachine.ts:76:13
+HTTP-Content-Type "text/html" wird nicht unterstützt. Laden der Medienressource http://localhost:5000/Get_Fit_Opening_FHD.mp4 fehlgeschlagen. localhost:5000
+HTTP-Content-Type "text/html" wird nicht unterstützt. Laden der Medienressource http://localhost:5000/Gersfeld_FHD.mp4 fehlgeschlagen. localhost:5000
+HTTP-Content-Type "text/html" wird nicht unterstützt. Laden der Medienressource http://localhost:5000/Vitaminversand_Ipster_FHD.mp4 fehlgeschlagen. localhost:5000
+Medien konnte nicht abgespielt werden. Keine Dekoder für angefragte Formate: text/html, text/html, text/html localhost:5000
+✅ Sync complete: ✓4 unchanged | Total: 4 files appStore.ts:269:19
+
+📺 [PLAYING] Slide 0 (video) useSlideshowMachine.ts:76:13
+   🎥 Video: 10s useSlideshowMachine.ts:85:15
+   ⏱️ Timer: 10500ms useSlideshowMachine.ts:101:15
+⏰ Scheduler: 4hours appStore.ts:557:17
+   ▶️ Playing useSlideshowMachine.ts:94:17
+
+➡️ Navigate: 0 → 1 (next) useSlideshowMachine.ts:143:15
+🔄 [STATE] TRANSITIONING useSlideshowMachine.ts:41:13
+🔄 [STATE] PLAYING useSlideshowMachine.ts:41:13
+
+📺 [PLAYING] Slide 1 (video) useSlideshowMachine.ts:76:13
+   🎥 Video: 10s useSlideshowMachine.ts:85:15
+   ⏱️ Timer: 10500ms useSlideshowMachine.ts:101:15
+   ▶️ Playing useSlideshowMachine.ts:94:17
+
+➡️ Navigate: 1 → 2 (next) useSlideshowMachine.ts:143:15
+🔄 [STATE] TRANSITIONING useSlideshowMachine.ts:41:13
+🔄 [STATE] PLAYING useSlideshowMachine.ts:41:13
+
+📺 [PLAYING] Slide 2 (video) useSlideshowMachine.ts:76:13
+   🎥 Video: 10s useSlideshowMachine.ts:85:15
+   ⏱️ Timer: 10500ms useSlideshowMachine.ts:101:15
+   ▶️ Playing
