@@ -15,7 +15,6 @@
 		"@tailwindcss/vite": "^4.1.17",
 		"@tanstack/react-router": "^1.134.15",
 		"@tanstack/router-plugin": "^1.134.15",
-		"glightbox": "^3.3.1",
 		"hono": "^4.10.4",
 		"opfs-tools": "^0.7.4",
 		"react": "^19.2.0",

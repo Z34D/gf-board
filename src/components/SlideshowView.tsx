@@ -17,9 +17,6 @@ const SlideshowView: React.FC = () => {
   const slides = React.useMemo(() => {
     return mediaFiles.map((file) => {
       const blobUrl = mediaUrls[file.localPath || '']
-      if (!blobUrl) {
-        console.warn(`⚠️ No blob URL for ${file.name}, using fallback`)
-      }
       return {
         href: blobUrl || file.localPath || '',
         type: file.type,
@@ -55,6 +52,11 @@ const SlideshowView: React.FC = () => {
           e.preventDefault()
           goToPrev()
           break
+        case 'l':
+        case 'L':
+          e.preventDefault()
+          clearSelectedLocation()
+          break
         // Escape is disabled for kiosk mode - prevent users from exiting
         default:
           break
@@ -64,7 +66,7 @@ const SlideshowView: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [slides.length, goToNext, goToPrev, clearSelectedLocation, showCursor, syncStatus.isSyncing])
+  }, [slides.length, goToNext, goToPrev, showCursor, syncStatus.isSyncing, clearSelectedLocation])
 
   // Touch Navigation
   const touchStartX = React.useRef(0)

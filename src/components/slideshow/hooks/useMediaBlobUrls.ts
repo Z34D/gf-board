@@ -47,8 +47,6 @@ export const useMediaBlobUrls = (mediaFiles: any[]) => {
           urls[mediaFile.localPath] = blobUrl
           objectUrlsRef.current.add(blobUrl)
           newLoaded.add(mediaFile.localPath)
-
-          console.log(`✅ Created blob URL for ${mediaFile.name}`)
         } catch (error) {
           console.error(`❌ Error converting ${mediaFile.localPath}:`, error)
         }

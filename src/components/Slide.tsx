@@ -29,26 +29,36 @@ export const Slide: React.FC<SlideProps> = ({
     (direction === 'prev' && index === (currentIndex - 1 + totalSlides) % totalSlides)
   )
 
-  // Smooth left-to-right slide animation
+  // Animation direction depends on navigation direction
   let translateX = '100%' // Default: off-screen right
 
   if (isActive && !isTransitioning) {
     // Current slide is visible
     translateX = '0%'
   } else if (isActive && isTransitioning) {
-    // Current slide is leaving
-    if (direction === 'next') {
-      translateX = '-100%' // Exit to left
-    } else {
-      translateX = '100%' // Exit to right
-    }
+    // Current slide is leaving - always to left
+    translateX = '-100%'
   } else if (isIncoming && isTransitioning) {
-    // Next slide is entering
-    if (direction === 'next') {
-      translateX = '100%' // Enter from right
-    } else {
-      translateX = '-100%' // Enter from left
-    }
+    // Incoming slide is entering - always from right
+    translateX = '100%'
+  }
+
+  // zIndex: incoming slide on top during transition, otherwise active slide on top
+  let zIndex = 0
+  if (!isTransitioning && isActive) {
+    zIndex = 10
+  } else if (isTransitioning && isIncoming) {
+    zIndex = 10
+  }
+
+  // Opacity: fade out active, fade in incoming
+  let opacity = 0 // Default: hidden
+  if (isActive && !isTransitioning) {
+    opacity = 1 // Active and not transitioning: fully visible
+  } else if (isActive && isTransitioning) {
+    opacity = 0 // Active and transitioning: fade out to 0
+  } else if (isIncoming && isTransitioning) {
+    opacity = 1 // Incoming during transition: fade in to 1
   }
 
   const slideStyle: React.CSSProperties = {
@@ -58,8 +68,9 @@ export const Slide: React.FC<SlideProps> = ({
     width: '100%',
     height: '100%',
     transform: `translateX(${translateX})`,
-    transition: isTransitioning ? 'transform 0.4s ease-in-out' : 'none',
-    zIndex: isActive ? 10 : 0
+    transition: isTransitioning ? 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out' : 'none',
+    opacity,
+    zIndex
   }
 
   return (

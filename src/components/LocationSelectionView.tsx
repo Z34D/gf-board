@@ -47,7 +47,7 @@ const LocationSelectionView: React.FC = () => {
       </div>
 
       {/* Shared width container so grid and card are exactly aligned */}
-      <div className="w-full max-w-3xl mx-auto relative z-10">
+      <div className="w-full max-w-3xl mx-auto px-6 relative z-10">
         {/* Location Selection Grid */}
         <div className="grid grid-cols-3 gap-5 mb-8">
           {availableLocations.map((location) => (

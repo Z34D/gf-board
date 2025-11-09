@@ -62,7 +62,7 @@ export default function LoginPage() {
       </div>
 
       {/* Shared width container so layout matches LocationSelectionView */}
-      <div className="w-full max-w-3xl mx-auto relative z-10">
+      <div className="w-full max-w-3xl mx-auto px-6 relative z-10">
 
         {/* Label */}
         <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-[.14em] mb-3 text-center">
