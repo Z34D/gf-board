@@ -8,6 +8,7 @@ export interface GLightboxSlide {
   description?: string
   width?: string
   height?: string
+  videoDuration?: number  // Duration in seconds for videos
 }
 
 /**
@@ -36,6 +37,41 @@ export class OPFSGLightboxAdapter {
   }
 
   /**
+   * Misst die Dauer eines Videos
+   */
+  private async getVideoDuration(videoUrl: string): Promise<number> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.src = videoUrl
+
+      const handleLoadedMetadata = () => {
+        cleanup()
+        const duration = video.duration
+        if (isFinite(duration) && duration > 0) {
+          resolve(duration)
+        } else {
+          // Fallback if duration is invalid
+          resolve(10)
+        }
+      }
+
+      const handleError = () => {
+        cleanup()
+        // Fallback if video can't be loaded
+        resolve(10)
+      }
+
+      const cleanup = () => {
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        video.removeEventListener('error', handleError)
+      }
+
+      video.addEventListener('loadedmetadata', handleLoadedMetadata)
+      video.addEventListener('error', handleError)
+    })
+  }
+
+  /**
    * Erstellt einen GLightbox Slide aus einem MediaFile
    */
   private async createSlideFromMediaFile(mediaFile: MediaFile): Promise<GLightboxSlide> {
@@ -46,7 +82,7 @@ export class OPFSGLightboxAdapter {
     // Prüfen ob Datei in OPFS existiert
     const fileHandle = file(mediaFile.localPath)
     const exists = await fileHandle.exists()
-    
+
     if (!exists) {
       throw new Error(`File not found in OPFS: ${mediaFile.localPath}`)
     }
@@ -57,7 +93,7 @@ export class OPFSGLightboxAdapter {
       throw new Error(`Could not load file from OPFS: ${mediaFile.localPath}`)
     }
     const objectUrl = URL.createObjectURL(originalFile)
-    
+
     // Object URL für Cleanup speichern
     this.objectUrls.add(objectUrl)
 
@@ -74,6 +110,15 @@ export class OPFSGLightboxAdapter {
     if (mediaFile.type === 'video') {
       slide.width = '100vw'
       slide.height = '100vh'
+      // Measure video duration before passing to GLightbox
+      try {
+        const duration = await this.getVideoDuration(objectUrl)
+        slide.videoDuration = duration
+        console.log(`📊 Video duration measured: ${duration.toFixed(1)}s`)
+      } catch (error) {
+        console.warn(`⚠️ Could not measure video duration:`, error)
+        slide.videoDuration = 10 // Fallback
+      }
     }
 
     return slide

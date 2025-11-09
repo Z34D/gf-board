@@ -8,18 +8,17 @@ import 'glightbox/dist/css/glightbox.css'
 
 // Konstanten
 const IMAGE_DISPLAY_DURATION = 10000 // 10 Sekunden
-const VIDEO_END_SLIDE_DELAY = 500 // 0.5 Sekunden
 
 const SlideshowView: React.FC = () => {
-  const { 
-    clearSelectedLocation, 
+  const {
+    clearSelectedLocation,
     mediaFiles,
     syncStatus
   } = useAppStore()
-  
+
   const lightboxRef = useRef<any>(null)
   const [slides, setSlides] = useState<GLightboxSlide[]>([])
-  const imageTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoPlayTimerRef = useRef<NodeJS.Timeout | null>(null)
   const loadedSlidesRef = useRef<Set<number>>(new Set())
   const cursorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -42,13 +41,13 @@ const SlideshowView: React.FC = () => {
     }, 3000)
   }
 
-  // Hilfsfunktion: Setup für Video (ended event)
+  // Hilfsfunktion: Setup für Video (ohne ended event - nutzen Timer stattdessen)
   const setupVideo = () => {
     const currentVideo = document.querySelector('video')
     if (!currentVideo) return
-    
+
     console.log(`🎬 Video setup: currentTime=${currentVideo.currentTime.toFixed(2)}s`)
-    
+
     // Nur auf 0 setzen wenn Video NICHT bereits am Anfang ist (< 0.5 Sekunden)
     // Das verhindert Stutter da slide_before_change das Video bereits auf 0 gesetzt hat
     if (currentVideo.currentTime > 0.5) {
@@ -56,27 +55,11 @@ const SlideshowView: React.FC = () => {
       currentVideo.pause()
       currentVideo.currentTime = 0
     }
-    
+
     currentVideo.loop = false
     currentVideo.muted = true
     currentVideo.volume = 0
-    
-    // Entferne alte Event Listener
-    const oldListener = (currentVideo as any)._glightboxEndedHandler
-    if (oldListener) {
-      currentVideo.removeEventListener('ended', oldListener)
-    }
-    
-    // Neuer Event Listener für Video-Ende
-    const endedHandler = () => {
-      console.log(`🎬 Video ended → next slide`)
-      setTimeout(() => goToNextSlide(), VIDEO_END_SLIDE_DELAY)
-    }
-    
-    // Speichere Handler am Element für späteres Cleanup
-    (currentVideo as any)._glightboxEndedHandler = endedHandler
-    currentVideo.addEventListener('ended', endedHandler)
-    
+
     // Video abspielen
     console.log(`🎬 Video playing`)
     if (currentVideo.paused) {
@@ -87,6 +70,7 @@ const SlideshowView: React.FC = () => {
         }
       })
     }
+    // NOTE: Auto-advance wird durch Timer in slide_changed event gehandlet, nicht durch 'ended' event
   }
 
   // Hilfsfunktion: Zum nächsten Slide mit manuellem Loop
@@ -114,31 +98,6 @@ const SlideshowView: React.FC = () => {
     
     // goToSlide() ist die richtige Methode für Navigation
     lightboxRef.current.goToSlide(prevIndex)
-  }
-
-  // Timer-Logik für Bilder (nur für Bilder!)
-  const startImageTimer = () => {
-    // Stoppe vorherigen Timer
-    if (imageTimerRef.current) {
-      clearTimeout(imageTimerRef.current)
-    }
-
-    if (!lightboxRef.current) return
-
-    const currentIndex = lightboxRef.current.index || 0
-    const currentSlide = slides[currentIndex]
-    
-    if (!currentSlide) return
-    
-    // Timer nur für Bilder setzen
-    if (currentSlide.type === 'image') {
-      console.log(`⏱️ Image timer started (${IMAGE_DISPLAY_DURATION / 1000}s)`)
-      imageTimerRef.current = setTimeout(() => {
-        console.log(`⏱️ Image timer expired → next slide`)
-        goToNextSlide()
-      }, IMAGE_DISPLAY_DURATION)
-    }
-    // Videos haben keinen Timer - sie nutzen das 'ended' Event
   }
 
   // Media Files zu GLightbox Slides konvertieren
@@ -225,12 +184,13 @@ const SlideshowView: React.FC = () => {
     // Event: Slide wechselt (vorher)
     lightboxRef.current.on('slide_before_change', (data: any) => {
       const { prev } = data
-      
-      // Stoppe Image-Timer
-      if (imageTimerRef.current) {
-        clearTimeout(imageTimerRef.current)
+
+      // Stoppe Auto-Play Timer (wird neu gesetzt in slide_changed event)
+      if (autoPlayTimerRef.current) {
+        clearTimeout(autoPlayTimerRef.current)
+        autoPlayTimerRef.current = null
       }
-      
+
       // Pausiere PREV Video (falls vorhanden), aber setze es NICHT zurück
       // Das verhindert den "first frame flash" in Chromium während der Slide-Transition
       const prevVideo = prev.slideNode?.querySelector('video')
@@ -245,7 +205,7 @@ const SlideshowView: React.FC = () => {
     // Event: Slide gewechselt (nachher)
     lightboxRef.current.on('slide_changed', (data: any) => {
       const { prev, current } = data
-      
+
       // Jetzt ist PREV Slide nicht mehr sichtbar → Video zurücksetzen
       // Das passiert NACH der Slide-Transition, daher kein "first frame flash"
       const prevVideo = prev.slideNode?.querySelector('video')
@@ -253,14 +213,31 @@ const SlideshowView: React.FC = () => {
         prevVideo.currentTime = 0
         console.log(`🔄 Video reset`)
       }
-      
+
       const currentIndex = current.slideIndex
       const currentSlide = slides[currentIndex]
-      
-      // Timer für Bilder starten (ohne setTimeout um Duplikate zu vermeiden)
-      if (currentSlide?.type === 'image') {
-        startImageTimer()
+
+      // NEUER TIMER LOGIC: Clearer alter Timer und setze neuen basierend auf Slide-Typ
+      if (autoPlayTimerRef.current) {
+        clearTimeout(autoPlayTimerRef.current)
+        autoPlayTimerRef.current = null
       }
+
+      if (!currentSlide) return
+
+      // Für beide Images UND Videos: Timer basierend auf duration
+      let slideDuration = IMAGE_DISPLAY_DURATION
+      if (currentSlide.type === 'video' && (currentSlide as any).videoDuration) {
+        slideDuration = Math.ceil((currentSlide as any).videoDuration * 1000)
+        console.log(`⏱️ Video duration: ${(slideDuration / 1000).toFixed(1)}s`)
+      } else if (currentSlide.type === 'image') {
+        console.log(`⏱️ Image duration: ${(slideDuration / 1000).toFixed(1)}s`)
+      }
+
+      autoPlayTimerRef.current = setTimeout(() => {
+        console.log(`➡️ Auto-advance from slide ${currentIndex}`)
+        goToNextSlide()
+      }, slideDuration)
     })
     
     // Slideshow starten
@@ -326,8 +303,8 @@ const SlideshowView: React.FC = () => {
       if (lightboxRef.current) {
         lightboxRef.current.destroy()
       }
-      if (imageTimerRef.current) {
-        clearTimeout(imageTimerRef.current)
+      if (autoPlayTimerRef.current) {
+        clearTimeout(autoPlayTimerRef.current)
       }
       if (cursorTimeoutRef.current) {
         clearTimeout(cursorTimeoutRef.current)

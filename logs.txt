@@ -1,0 +1,28 @@
+🚀 Init: Gersfeld
+appStore.ts:179 🔄 Syncing: Gersfeld
+2glightboxAdapter.ts:117 📊 Video duration measured: 5.0s
+2glightboxAdapter.ts:117 📊 Video duration measured: 183.0s
+2glightboxAdapter.ts:117 📊 Video duration measured: 10.0s
+appStore.ts:268 ✅ Sync complete: ✓4 unchanged | Total: 4 files
+SlideshowView.tsx:67 📊 Slide 0: Get_Fit_Opening_FHD.mp4 | 5.0s
+SlideshowView.tsx:67 📊 Slide 1: Gersfeld_FHD.mp4 | 183.0s
+SlideshowView.tsx:67 📊 Slide 2: Vitaminversand_Ipster_FHD.mp4 | 10.0s
+SlideshowView.tsx:67 📊 Slide 3: Coaching Ipster.png | 10.0s
+SlideshowView.tsx:93 🎬 GLightbox object created: t2 {customOptions: {…}, settings: {…}, effectsClasses: 'gfadeIn gfadeOut gzoomIn gzoomOut gslideInRight gs…deOutLeft gslideInLeft gslideOutRight gnone gnone', videoPlayers: {…}, apiEvents: Array(0), …}
+SlideshowView.tsx:119 ✅ GLightbox initialized with 4 slides
+SlideshowView.tsx:120 🎬 Calling lightboxRef.current.open()...
+SlideshowView.tsx:123 ✅ GLightbox.open() successful
+appStore.ts:556 ⏰ Scheduler: 4hours
+glightboxAdapter.ts:117 📊 Video duration measured: 5.0s
+glightboxAdapter.ts:117 📊 Video duration measured: 183.0s
+glightboxAdapter.ts:117 📊 Video duration measured: 10.0s
+SlideshowView.tsx:67 📊 Slide 0: Get_Fit_Opening_FHD.mp4 | 5.0s
+SlideshowView.tsx:67 📊 Slide 1: Gersfeld_FHD.mp4 | 183.0s
+SlideshowView.tsx:67 📊 Slide 2: Vitaminversand_Ipster_FHD.mp4 | 10.0s
+SlideshowView.tsx:67 📊 Slide 3: Coaching Ipster.png | 10.0s
+SlideshowView.tsx:93 🎬 GLightbox object created: t2 {customOptions: {…}, settings: {…}, effectsClasses: 'gfadeIn gfadeOut gzoomIn gzoomOut gslideInRight gs…deOutLeft gslideInLeft gslideOutRight gnone gnone', videoPlayers: {…}, apiEvents: Array(0), …}
+SlideshowView.tsx:119 ✅ GLightbox initialized with 4 slides
+SlideshowView.tsx:120 🎬 Calling lightboxRef.current.open()...
+SlideshowView.tsx:123 ✅ GLightbox.open() successful
+SlideshowView.tsx:110 ⏱️ Slide 0: 5.0s
+SlideshowView.tsx:110 ⏱️ Slide 0: 5.0s
