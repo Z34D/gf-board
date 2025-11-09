@@ -171,10 +171,9 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 		respHeaders.set('Access-Control-Allow-Origin', '*')
 		respHeaders.set('Access-Control-Allow-Credentials', 'true')
 
-		// Verwende arrayBuffer() für alle Inhalte - das funktioniert zuverlässig
-		const buf = await resp.arrayBuffer()
-
-		return new Response(buf, {
+		// STATT arrayBuffer() zu verwenden, streamen wir die Response direkt
+		// Dies verhindert Memory-Limit-Überschreitungen bei großen Dateien
+		return new Response(resp.body, {
 			status: resp.status,
 			statusText: resp.statusText,
 			headers: respHeaders
