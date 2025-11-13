@@ -46,6 +46,14 @@ const SlideshowView: React.FC = () => {
   // Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Allow logout (L key) always, even without slides
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault()
+        clearSelectedLocation()
+        return
+      }
+
+      // Block other navigation if syncing or no slides
       if (syncStatus.isSyncing || slides.length === 0) return
 
       switch (e.key) {
@@ -57,11 +65,6 @@ const SlideshowView: React.FC = () => {
         case 'ArrowLeft':
           e.preventDefault()
           goToPrev()
-          break
-        case 'l':
-        case 'L':
-          e.preventDefault()
-          clearSelectedLocation()
           break
         // Escape is disabled for kiosk mode - prevent users from exiting
         default:
