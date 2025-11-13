@@ -38,7 +38,7 @@ export const useSlideshowMachine = (slides: any[]) => {
 
   // State transition tracking
   useEffect(() => {
-    console.log(`🔄 [STATE] ${state}`)
+    // console.log(`🔄 [STATE] ${state}`)
   }, [state])
 
   // 📥 Start loading when slides are available
@@ -53,7 +53,7 @@ export const useSlideshowMachine = (slides: any[]) => {
     if (state === 'LOADING') {
       const allHaveBlobs = slides.length > 0 && slides.every(s => s.href.startsWith('blob:'))
       if (allHaveBlobs) {
-        console.log(`✅ All blob URLs ready, transitioning to READY state`)
+        // console.log(`✅ All blob URLs ready, transitioning to READY state`)
         dispatch({ type: 'MEDIA_READY' })
       }
     }
@@ -73,7 +73,7 @@ export const useSlideshowMachine = (slides: any[]) => {
     const currentSlide = slides[currentIndex]
     if (!currentSlide) return
 
-    console.log(`\n📺 [PLAYING] Slide ${currentIndex} (${currentSlide.type})`)
+    // console.log(`\n📺 [PLAYING] Slide ${currentIndex} (${currentSlide.type})`)
 
     // Clear old timer
     if (autoPlayTimerRef.current) {
@@ -89,44 +89,46 @@ export const useSlideshowMachine = (slides: any[]) => {
       video.muted = true
       video.volume = 0
 
-      // Function to start auto-advance with correct duration
-      const startAutoAdvance = () => {
-        // Get actual video duration or use stored value or default
-        const actualDuration = video.duration || currentSlide.videoDuration || 10
-        console.log(`   🎥 Video: ${actualDuration}s`)
-        console.log(`   ⏱️ Timer: ${Math.ceil(actualDuration * 1000) + 500}ms`)
+      // Function to play video when ready
+      const playVideo = () => {
+        video.play().then(() => {
+          // console.log(`   ▶️ Playing`)
+        }).catch((err) => {
+          // console.warn(`   ⚠️ Play failed:`, err.message)
+        })
 
-        const duration = Math.ceil(actualDuration * 1000) + 500
+        // Set timer based on actual duration
+        const actualDuration = video.duration || currentSlide.videoDuration || 10
+        // console.log(`   🎥 Video: ${actualDuration}s`)
+        const duration = Math.ceil(actualDuration * 1000)
+        // console.log(`   ⏱️ Auto-advance in: ${duration}ms`)
+
         autoPlayTimerRef.current = setTimeout(() => {
           goToNextRef.current()
         }, duration)
       }
 
-      // Wait for metadata to be loaded so we can get duration
-      if (video.readyState >= 1) {
-        // Metadata already loaded
-        startAutoAdvance()
+      // Wait for video to be ready (readyState >= 2 means current frame is available)
+      if (video.readyState >= 2) {
+        // Video is already ready to play
+        // console.log(`   ✅ Video ready (readyState: ${video.readyState})`)
+        playVideo()
       } else {
-        // Wait for metadata
-        const handleLoadedMetadata = () => {
-          startAutoAdvance()
-          video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        // Wait for canplay event - more reliable than readyState checking
+        // console.log(`   ⏳ Waiting for video to be ready...`)
+        const handleCanPlay = () => {
+          // console.log(`   ✅ Video ready (canplay event)`)
+          playVideo()
+          video.removeEventListener('canplay', handleCanPlay)
         }
-        video.addEventListener('loadedmetadata', handleLoadedMetadata)
+        video.addEventListener('canplay', handleCanPlay)
       }
-
-      // Play
-      video.play().then(() => {
-        console.log(`   ▶️ Playing`)
-      }).catch((err) => {
-        console.warn(`   ⚠️ Play failed:`, err.message)
-      })
     } else if (currentSlide.type === 'image') {
-      console.log(`   🖼️ Image`)
+      // console.log(`   🖼️ Image`)
 
       // Image auto-advance
       const IMAGE_DURATION = 10000
-      console.log(`   ⏱️ Timer: ${IMAGE_DURATION}ms`)
+      // console.log(`   ⏱️ Timer: ${IMAGE_DURATION}ms`)
 
       autoPlayTimerRef.current = setTimeout(() => {
         goToNextRef.current()
@@ -158,7 +160,7 @@ export const useSlideshowMachine = (slides: any[]) => {
         return
       }
 
-      console.log(`\n➡️ Navigate: ${currentIndex} → ${index} (${dir})`)
+      // console.log(`\n➡️ Navigate: ${currentIndex} → ${index} (${dir})`)
 
       // Pause current video
       if (videoRef.current && videoRef.current.paused === false) {

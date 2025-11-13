@@ -78,7 +78,7 @@ export const Slide: React.FC<SlideProps> = ({
       {slide.type === 'video' ? (
         <video
           ref={isActive ? videoRef : undefined}
-          src={slide.href}
+          src={isActive ? slide.href : undefined}
           style={{
             width: '100%',
             height: '100%',
