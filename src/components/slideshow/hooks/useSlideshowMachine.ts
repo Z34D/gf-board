@@ -91,11 +91,11 @@ export const useSlideshowMachine = (slides: any[]) => {
 
       // Function to play video when ready
       const playVideo = () => {
-        video.play().then(() => {
+        //video.play().then(() => {
           // console.log(`   ▶️ Playing`)
-        }).catch((err) => {
+        //}).catch((err) => {
           // console.warn(`   ⚠️ Play failed:`, err.message)
-        })
+        //})
 
         // Set timer based on actual duration
         const actualDuration = video.duration || currentSlide.videoDuration || 10
