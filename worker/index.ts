@@ -14,6 +14,38 @@ type Env = {
 
 const app = new Hono<Env>()
 
+// Rate Limiting für Login
+const loginAttempts = new Map<string, { count: number; resetTime: number }>()
+const MAX_LOGIN_ATTEMPTS = 5
+const LOGIN_WINDOW_MS = 15 * 60 * 1000  // 15 Minuten
+
+// Cleanup alte Einträge regelmäßig
+setInterval(() => {
+	const now = Date.now()
+	for (const [ip, data] of loginAttempts.entries()) {
+		if (now > data.resetTime) {
+			loginAttempts.delete(ip)
+		}
+	}
+}, 60 * 1000)  // Jede Minute cleanup
+
+// Rate Limit Middleware für Login
+async function rateLimitLoginMiddleware(c: Context<Env>, next: Next) {
+	const clientIp = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || 'unknown'
+	const now = Date.now()
+
+	const attempt = loginAttempts.get(clientIp)
+	if (attempt && attempt.count >= MAX_LOGIN_ATTEMPTS && now < attempt.resetTime) {
+		const waitSeconds = Math.ceil((attempt.resetTime - now) / 1000)
+		return c.json(
+			{ error: `Zu viele Versuche. Versuchen Sie es in ${waitSeconds} Sekunden erneut.` },
+			429
+		)
+	}
+
+	await next()
+}
+
 // CORS für alle Routen
 app.use('*', cors({
 	origin: '*',
@@ -29,7 +61,10 @@ app.use('*', async (c, next) => {
 })
 
 // Auth Login Endpoint
-app.post('/api/auth/login', async (c) => {
+app.post('/api/auth/login', rateLimitLoginMiddleware, async (c) => {
+	const clientIp = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || 'unknown'
+	const now = Date.now()
+
 	try {
 		const { pin } = await c.req.json()
 
@@ -37,8 +72,17 @@ app.post('/api/auth/login', async (c) => {
 		const storedPin = await c.env.GF_KIOSK_KV.get('kiosk_pin')
 
 		if (!storedPin || pin !== storedPin) {
-			return c.json({ error: 'Invalid PIN' }, 401)
+			// Track failed attempt
+			const attempt = loginAttempts.get(clientIp) || { count: 0, resetTime: now + LOGIN_WINDOW_MS }
+			attempt.count++
+			attempt.resetTime = now + LOGIN_WINDOW_MS
+			loginAttempts.set(clientIp, attempt)
+
+			return c.json({ error: 'PIN ungültig' }, 401)
 		}
+
+		// Success - clear attempts
+		loginAttempts.delete(clientIp)
 
 		// Get JWT secret from KV
 		const jwtSecret = await c.env.GF_KIOSK_KV.get('jwt_secret')
@@ -131,7 +175,10 @@ async function authMiddleware(c: Context<Env>, next: Next) {
 
 // Google Drive API Proxy: leitet `/api/drive/*` an Google Drive API weiter (geschützt)
 app.all('/api/drive/*', authMiddleware, async (c) => {
-	const apiKey = c.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY'
+	const apiKey = c.env.GOOGLE_DRIVE_API_KEY
+	if (!apiKey) {
+		return c.json({ error: 'Server not configured - missing API key' }, 500)
+	}
 	const reqUrl = new URL(c.req.url)
 
 	// Entferne /api/drive/ prefix und füge API Key hinzu
@@ -153,12 +200,19 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 	const body = ['GET', 'HEAD'].includes(method) ? undefined : await c.req.arrayBuffer()
 
 	try {
+		// 5 minute timeout for large file downloads
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000)
+
 		const resp = await fetch(upstreamUrl, {
 			method,
 			headers,
 			body,
 			redirect: 'follow',
+			signal: controller.signal
 		})
+
+		clearTimeout(timeoutId)
 
 		// Kopiere alle Headers und füge CORS hinzu
 		const respHeaders = new Headers()
@@ -179,8 +233,20 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 			headers: respHeaders
 		})
 	} catch (err) {
-		console.error(`❌ Drive API error:`, err)
 		const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+
+		if (err instanceof DOMException && err.name === 'AbortError') {
+			console.error(`⏱️ Drive API timeout (5 min exceeded)`)
+			return new Response(JSON.stringify({ error: 'Request timeout - file too large or server too slow' }), {
+				status: 504,
+				headers: {
+					'content-type': 'application/json',
+					'Access-Control-Allow-Origin': '*',
+				},
+			})
+		}
+
+		console.error(`❌ Drive API error:`, err)
 		return new Response(JSON.stringify({ error: 'Google Drive API fetch failed', details: errorMessage }), {
 			status: 502,
 			headers: {

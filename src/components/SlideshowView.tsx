@@ -13,17 +13,23 @@ const SlideshowView: React.FC = () => {
   const mediaUrls = useMediaBlobUrls(mediaFiles)
 
   // Convert mediaFiles to slide format with blob URLs
-  // WICHTIG: Wait until mediaUrls are ready before creating slides
+  // Skip files that couldn't be loaded (codec unsupported, etc.)
   const slides = React.useMemo(() => {
-    return mediaFiles.map((file) => {
-      const blobUrl = mediaUrls[file.localPath || '']
-      return {
-        href: blobUrl || file.localPath || '',
-        type: file.type,
-        videoDuration: file.videoDuration,
-        title: file.name
-      }
-    })
+    return mediaFiles
+      .filter((file) => {
+        // Only include files that have blob URLs loaded
+        const blobUrl = mediaUrls[file.localPath || '']
+        return !!blobUrl
+      })
+      .map((file) => {
+        const blobUrl = mediaUrls[file.localPath || '']
+        return {
+          href: blobUrl,
+          type: file.type,
+          videoDuration: file.videoDuration,
+          title: file.name
+        }
+      })
   }, [mediaFiles, mediaUrls])
 
   // Slideshow State Machine Hook

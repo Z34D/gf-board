@@ -53,7 +53,7 @@ const LocationSelectionView: React.FC = () => {
           {availableLocations.map((location) => (
             <button
               key={location}
-              onClick={() => setSelectedLocation(location)}
+              onClick={() => setSelectedLocation(location).catch(console.error)}
               className={`
                 px-6 py-6 sm:px-7 sm:py-7 rounded-xl text-xl sm:text-2xl font-semibold transition-all duration-300 flex flex-col items-center
                 ${selectedLocation === location 

@@ -2,6 +2,21 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { file, dir, write } from 'opfs-tools'
 
+// OPFS Feature Detection
+const hasOPFS = (() => {
+  try {
+    return typeof navigator !== 'undefined' &&
+           'storage' in navigator &&
+           'getDirectory' in navigator.storage
+  } catch {
+    return false
+  }
+})()
+
+if (!hasOPFS) {
+  console.warn('⚠️ OPFS not supported in this browser - file caching disabled')
+}
+
 // Helper function to get interval in milliseconds
 function getIntervalMs(interval: SchedulerConfig['interval']): number {
   switch (interval) {
@@ -75,7 +90,7 @@ interface AppState {
   googleDriveFolderId: string
   
   // Actions
-  setSelectedLocation: (location: string) => void
+  setSelectedLocation: (location: string) => Promise<void>
   setAvailableLocations: (locations: string[]) => void
   setMediaFiles: (files: MediaFile[]) => void
   setCurrentIndex: (index: number) => void
@@ -133,21 +148,21 @@ export const useAppStore = create<AppState>()(
       googleDriveFolderId: 'REDACTED_FOLDER_ID',
       
       // Actions
-      setSelectedLocation: (location) => {
+      setSelectedLocation: async (location) => {
         const { selectedLocation, clearAllOPFSFiles, schedulerConfig } = get()
-        
+
         // If changing location, clear OPFS first
         if (selectedLocation && selectedLocation !== location) {
-          console.log(`🔄 Location changed: ${selectedLocation} → ${location}`)
-          clearAllOPFSFiles()
+          // console.log(`🔄 Location changed: ${selectedLocation} → ${location}`)
+          await clearAllOPFSFiles()
         }
-        
+
         set({ selectedLocation: location })
-        
+
         // Auto-sync when location is selected
         if (location) {
-          get().syncLocationMedia(location)
-          
+          await get().syncLocationMedia(location)
+
           // Restart scheduler if enabled
           if (schedulerConfig.enabled) {
             get().startScheduler()
@@ -203,8 +218,11 @@ export const useAppStore = create<AppState>()(
           // 2. Get all files from Google Drive
           if (sharedFolder) {
             const sharedFiles = await get().listDriveFolder(sharedFolder.id)
-            
+
             for (const driveFile of sharedFiles) {
+              // Skip files without mimeType
+              if (!driveFile.mimeType) continue
+
               if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
                 const mediaFile: MediaFile = {
                   id: driveFile.id,
@@ -219,11 +237,14 @@ export const useAppStore = create<AppState>()(
               }
             }
           }
-          
+
           if (locationFolder) {
             const locationFiles = await get().listDriveFolder(locationFolder.id)
-            
+
             for (const driveFile of locationFiles) {
+              // Skip files without mimeType
+              if (!driveFile.mimeType) continue
+
               if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
                 const mediaFile: MediaFile = {
                   id: driveFile.id,
@@ -516,36 +537,46 @@ export const useAppStore = create<AppState>()(
 
       startScheduler: () => {
         const { schedulerConfig, selectedLocation } = get()
-        
+
         if (!schedulerConfig.enabled || !selectedLocation) return
-        
-        // Clear existing interval
-        get().stopScheduler()
-        
+
+        // If already running, don't create duplicate
+        if (schedulerConfig.intervalId) {
+          // console.log(`⏰ Scheduler already running`)
+          return
+        }
+
         // Set up interval based on configuration
         const intervalMs = getIntervalMs(schedulerConfig.interval)
-        
+
         const intervalId = setInterval(async () => {
-          const { schedulerConfig, selectedLocation } = get()
-          
-          if (!schedulerConfig.enabled || !selectedLocation) {
+          const { schedulerConfig: currentConfig, selectedLocation: currentLocation, syncStatus } = get()
+
+          // Stop if disabled or no location
+          if (!currentConfig.enabled || !currentLocation) {
             get().stopScheduler()
             return
           }
-          
-          await get().syncLocationMedia(selectedLocation)
-          
+
+          // Prevent concurrent syncs
+          if (syncStatus.isSyncing) {
+            // console.log(`⏰ Sync already in progress, skipping this tick`)
+            return
+          }
+
+          await get().syncLocationMedia(currentLocation)
+
           // Update next sync time
-          const nextSync = get().calculateNextSync(schedulerConfig.interval)
+          const nextSync = get().calculateNextSync(currentConfig.interval)
           set(state => ({
             schedulerConfig: {
               ...state.schedulerConfig,
               nextSync
             }
           }))
-          
+
         }, intervalMs)
-        
+
         // Store interval ID for cleanup
         set(state => ({
           schedulerConfig: {
@@ -553,13 +584,13 @@ export const useAppStore = create<AppState>()(
             intervalId: intervalId as any
           }
         }))
-        
-        console.log(`⏰ Scheduler: ${schedulerConfig.interval}`)
+
+        // console.log(`⏰ Scheduler started: ${schedulerConfig.interval}`)
       },
 
       stopScheduler: () => {
         const { schedulerConfig } = get()
-        
+
         if (schedulerConfig.intervalId) {
           clearInterval(schedulerConfig.intervalId as any)
           set(state => ({
@@ -568,6 +599,7 @@ export const useAppStore = create<AppState>()(
               intervalId: undefined
             }
           }))
+          // console.log(`⏰ Scheduler stopped`)
         }
       },
 
