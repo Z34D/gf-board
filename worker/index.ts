@@ -19,16 +19,6 @@ const loginAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_LOGIN_ATTEMPTS = 5
 const LOGIN_WINDOW_MS = 15 * 60 * 1000  // 15 Minuten
 
-// Cleanup alte Einträge regelmäßig
-setInterval(() => {
-	const now = Date.now()
-	for (const [ip, data] of loginAttempts.entries()) {
-		if (now > data.resetTime) {
-			loginAttempts.delete(ip)
-		}
-	}
-}, 60 * 1000)  // Jede Minute cleanup
-
 // Rate Limit Middleware für Login
 async function rateLimitLoginMiddleware(c: Context<Env>, next: Next) {
 	const clientIp = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || 'unknown'
