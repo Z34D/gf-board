@@ -9,12 +9,6 @@ async function main() {
   await kv.init();
 
   // Initialize KV with default auth values if not present
-  const existingPin = await kv.get('kiosk_pin');
-  if (!existingPin) {
-    await kv.put('kiosk_pin', '1234');
-    console.log('🔑 Initialized default PIN: 1234');
-  }
-  
   const existingSecret = await kv.get('jwt_secret');
   if (!existingSecret) {
     // Generate a random JWT secret for dev
@@ -22,6 +16,10 @@ async function main() {
     await kv.put('jwt_secret', secret);
     console.log('🔐 Initialized JWT secret');
   }
+
+  // Log PIN configuration
+  const pin = process.env.KIOSK_PIN || '1234';
+  console.log(`🔑 Using PIN: ${pin}`);
 
   // Einfacher Fetcher, der statische Anfragen zur Vite-Dev-Server weiterleitet
   const ASSETS = {
@@ -37,14 +35,16 @@ async function main() {
     },
   };
 
-  const env: { 
-    GF_KIOSK_KV: LocalKV; 
+  const env: {
+    GF_KIOSK_KV: LocalKV;
     ASSETS: { fetch: (req: Request) => Promise<Response> };
     GOOGLE_DRIVE_API_KEY: string;
-  } = { 
-    GF_KIOSK_KV: kv, 
+    KIOSK_PIN: string;
+  } = {
+    GF_KIOSK_KV: kv,
     ASSETS,
-    GOOGLE_DRIVE_API_KEY: 'REDACTED_GOOGLE_API_KEY'
+    GOOGLE_DRIVE_API_KEY: 'REDACTED_GOOGLE_API_KEY',
+    KIOSK_PIN: process.env.KIOSK_PIN || '1234'
   };
 
   const server = Bun.serve({

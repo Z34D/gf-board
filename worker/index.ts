@@ -8,6 +8,7 @@ type Env = {
 	Bindings: {
 		ASSETS: Fetcher
 		GOOGLE_DRIVE_API_KEY: string
+		KIOSK_PIN: string
 		GF_KIOSK_KV: KVNamespace
 	}
 }
@@ -58,10 +59,14 @@ app.post('/api/auth/login', rateLimitLoginMiddleware, async (c) => {
 	try {
 		const { pin } = await c.req.json()
 
-		// Get stored PIN from KV
-		const storedPin = await c.env.GF_KIOSK_KV.get('kiosk_pin')
+		// Get PIN from environment variable
+		const storedPin = c.env.KIOSK_PIN
 
-		if (!storedPin || pin !== storedPin) {
+		if (!storedPin) {
+			return c.json({ error: 'Server configuration error - PIN not set' }, 500)
+		}
+
+		if (pin !== storedPin) {
 			// Track failed attempt
 			const attempt = loginAttempts.get(clientIp) || { count: 0, resetTime: now + LOGIN_WINDOW_MS }
 			attempt.count++
