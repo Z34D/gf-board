@@ -1,4 +1,4 @@
-name = "gf-board"
+name = "simeon-gf-kiosk"
 main = "./worker/index.ts"
 compatibility_date = "2025-04-09"
 upload_source_maps = true
@@ -14,6 +14,7 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-[[kv_namespaces]]
-binding = "GF_KIOSK_KV"
-id = "ca140f8c7fdc408daa09b2f044fe6747"
+# Environment Variables (set in Cloudflare Dashboard)
+# GOOGLE_DRIVE_API_KEY - Google Drive API key
+# KIOSK_PIN - PIN for authentication
+# JWT_SECRET - Secret for JWT token signing (use random 32+ character string)

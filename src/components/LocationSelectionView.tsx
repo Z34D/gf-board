@@ -39,7 +39,7 @@ const LocationSelectionView: React.FC = () => {
       <div className="text-center mb-10 relative z-10">
         <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tight mb-0">
           <span className="text-white">GF </span>
-          <span className="text-red-500">Board</span>
+          <span className="text-red-500">Kiosk</span>
         </h1>
         <p className="text-base sm:text-lg text-gray-300 mt-4">
           Wähle deinen Standort aus
@@ -55,9 +55,9 @@ const LocationSelectionView: React.FC = () => {
               key={location}
               onClick={() => setSelectedLocation(location).catch(console.error)}
               className={`
-                px-6 py-6 sm:px-7 sm:py-7 rounded-xl text-xl sm:text-2xl font-semibold transition-all duration-300 flex flex-col items-center
-                ${selectedLocation === location 
-                  ? 'bg-gradient-to-b from-blue-600 to-blue-700 text-white shadow-xl shadow-blue-600/40 scale-105 ring-1 ring-white/10' 
+                px-6 py-6 sm:px-7 sm:py-7 rounded-xl text-xl sm:text-2xl font-semibold transition-all duration-300 flex flex-col items-center cursor-pointer
+                ${selectedLocation === location
+                  ? 'bg-gradient-to-b from-blue-600 to-blue-700 text-white shadow-xl shadow-blue-600/40 scale-105 ring-1 ring-white/10'
                   : 'bg-gradient-to-b from-neutral-900/95 to-neutral-800/80 text-gray-200 hover:from-neutral-900 hover:to-neutral-800 hover:text-white hover:scale-[1.02] ring-1 ring-white/10 shadow-[0_10px_30px_rgba(0,0,0,.35)]'
                 }
               `}

@@ -5,7 +5,7 @@ import LocationSelectionView from '../components/LocationSelectionView'
 import SlideshowView from '../components/SlideshowView'
 
 export const Route = createFileRoute('/')({
-  component: BoardPage,
+  component: KioskPage,
   beforeLoad: async () => {
     // Check authentication
     try {
@@ -24,7 +24,7 @@ export const Route = createFileRoute('/')({
   },
 })
 
-function BoardPage() {
+function KioskPage() {
   const { selectedLocation, initializeApp } = useAppStore()
 
   // Initialize app on mount

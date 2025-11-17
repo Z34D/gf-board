@@ -142,7 +142,7 @@ export const useAppStore = create<AppState>()(
       },
       schedulerConfig: {
         enabled: true,
-        interval: '4hours',
+        interval: 'daily4am',
         nextSync: null
       },
       googleDriveFolderId: 'REDACTED_FOLDER_ID',
@@ -624,7 +624,7 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: 'gf-board-storage',
+      name: 'gf-kiosk-storage',
       partialize: (state) => ({ 
         selectedLocation: state.selectedLocation,
         mediaFiles: state.mediaFiles,

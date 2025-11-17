@@ -57,7 +57,7 @@ export default function LoginPage() {
       <div className="text-center mb-10 relative z-10">
         <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tight mb-0">
           <span className="text-white">GF </span>
-          <span className="text-red-500">Board</span>
+          <span className="text-red-500">Kiosk</span>
         </h1>       
       </div>
 

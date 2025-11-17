@@ -9,7 +9,7 @@ type Env = {
 		ASSETS: Fetcher
 		GOOGLE_DRIVE_API_KEY: string
 		KIOSK_PIN: string
-		GF_KIOSK_KV: KVNamespace
+		JWT_SECRET: string
 	}
 }
 
@@ -79,10 +79,10 @@ app.post('/api/auth/login', rateLimitLoginMiddleware, async (c) => {
 		// Success - clear attempts
 		loginAttempts.delete(clientIp)
 
-		// Get JWT secret from KV
-		const jwtSecret = await c.env.GF_KIOSK_KV.get('jwt_secret')
+		// Get JWT secret from environment variable
+		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
-			return c.json({ error: 'Server configuration error' }, 500)
+			return c.json({ error: 'Server configuration error - JWT_SECRET not set' }, 500)
 		}
 
 		// Generate JWT token (10 years expiry)
@@ -119,7 +119,7 @@ app.get('/api/auth/check', async (c) => {
 	}
 
 	try {
-		const jwtSecret = await c.env.GF_KIOSK_KV.get('jwt_secret')
+		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
 			return c.json({ authenticated: false }, 500)
 		}
@@ -156,7 +156,7 @@ async function authMiddleware(c: Context<Env>, next: Next) {
 	}
 
 	try {
-		const jwtSecret = await c.env.GF_KIOSK_KV.get('jwt_secret')
+		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
 			return c.json({ error: 'Server configuration error' }, 500)
 		}
@@ -189,7 +189,7 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 
 	const headers = new Headers(c.req.header())
 	headers.delete('host')
-	headers.set('User-Agent', 'GF-Board-Kiosk/1.0')
+	headers.set('User-Agent', 'GF-Kiosk/1.0')
 
 	const method = c.req.method
 	const body = ['GET', 'HEAD'].includes(method) ? undefined : await c.req.arrayBuffer()
@@ -256,7 +256,7 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 app.get('/api/health', (c) => {
 	return c.json({
 		status: 'ok',
-		service: 'GF Board Kiosk Proxy',
+		service: 'GF Kiosk Proxy',
 		timestamp: new Date().toISOString()
 	})
 })

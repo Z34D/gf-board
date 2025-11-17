@@ -1,24 +1,13 @@
 import app from '../worker/index';
-import { LocalKV } from './localKV';
 
 const BACKEND_PORT = Number(process.env.BACKEND_PORT || 3001); // Use different port
 const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 5000);
 
 async function main() {
-  const kv = new LocalKV();
-  await kv.init();
-
-  // Initialize KV with default auth values if not present
-  const existingSecret = await kv.get('jwt_secret');
-  if (!existingSecret) {
-    // Generate a random JWT secret for dev
-    const secret = 'dev-secret-' + Math.random().toString(36).substring(2, 15);
-    await kv.put('jwt_secret', secret);
-    console.log('🔐 Initialized JWT secret');
-  }
-
-  // Log PIN configuration
+  const jwtSecret = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
   const pin = process.env.KIOSK_PIN || '1234';
+
+  console.log(`🔐 Using JWT_SECRET: ${jwtSecret.substring(0, 10)}...`);
   console.log(`🔑 Using PIN: ${pin}`);
 
   // Einfacher Fetcher, der statische Anfragen zur Vite-Dev-Server weiterleitet
@@ -36,15 +25,15 @@ async function main() {
   };
 
   const env: {
-    GF_KIOSK_KV: LocalKV;
     ASSETS: { fetch: (req: Request) => Promise<Response> };
     GOOGLE_DRIVE_API_KEY: string;
     KIOSK_PIN: string;
+    JWT_SECRET: string;
   } = {
-    GF_KIOSK_KV: kv,
     ASSETS,
     GOOGLE_DRIVE_API_KEY: 'REDACTED_GOOGLE_API_KEY',
-    KIOSK_PIN: process.env.KIOSK_PIN || '1234'
+    KIOSK_PIN: pin,
+    JWT_SECRET: jwtSecret
   };
 
   const server = Bun.serve({
