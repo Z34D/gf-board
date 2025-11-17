@@ -6,9 +6,15 @@ const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 5000);
 async function main() {
   const jwtSecret = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
   const pin = process.env.KIOSK_PIN || '1234';
+  const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
+  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 'REDACTED_FOLDER_ID';
 
   console.log(`🔐 Using JWT_SECRET: ${jwtSecret.substring(0, 10)}...`);
   console.log(`🔑 Using PIN: ${pin}`);
+  console.log(`📁 Using Root Folder ID: ${rootFolderId}`);
+  if (!apiKey) {
+    console.warn('⚠️  GOOGLE_DRIVE_API_KEY not set in environment');
+  }
 
   // Einfacher Fetcher, der statische Anfragen zur Vite-Dev-Server weiterleitet
   const ASSETS = {
@@ -27,11 +33,13 @@ async function main() {
   const env: {
     ASSETS: { fetch: (req: Request) => Promise<Response> };
     GOOGLE_DRIVE_API_KEY: string;
+    GOOGLE_DRIVE_ROOT_FOLDER_ID: string;
     KIOSK_PIN: string;
     JWT_SECRET: string;
   } = {
     ASSETS,
-    GOOGLE_DRIVE_API_KEY: 'REDACTED_GOOGLE_API_KEY',
+    GOOGLE_DRIVE_API_KEY: apiKey || '',
+    GOOGLE_DRIVE_ROOT_FOLDER_ID: rootFolderId,
     KIOSK_PIN: pin,
     JWT_SECRET: jwtSecret
   };

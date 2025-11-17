@@ -8,6 +8,7 @@ type Env = {
 	Bindings: {
 		ASSETS: Fetcher
 		GOOGLE_DRIVE_API_KEY: string
+		GOOGLE_DRIVE_ROOT_FOLDER_ID: string
 		KIOSK_PIN: string
 		JWT_SECRET: string
 	}
@@ -19,6 +20,35 @@ const app = new Hono<Env>()
 const loginAttempts = new Map<string, { count: number; resetTime: number }>()
 const MAX_LOGIN_ATTEMPTS = 5
 const LOGIN_WINDOW_MS = 15 * 60 * 1000  // 15 Minuten
+
+// Validate environment variables and log missing ones
+function validateEnvironment(c: Context<Env>): { isValid: boolean; missingVars: string[] } {
+	const missingVars: string[] = []
+
+	if (!c.env.GOOGLE_DRIVE_API_KEY) {
+		missingVars.push('GOOGLE_DRIVE_API_KEY')
+	}
+	if (!c.env.GOOGLE_DRIVE_ROOT_FOLDER_ID) {
+		missingVars.push('GOOGLE_DRIVE_ROOT_FOLDER_ID')
+	}
+	if (!c.env.KIOSK_PIN) {
+		missingVars.push('KIOSK_PIN')
+	}
+	if (!c.env.JWT_SECRET) {
+		missingVars.push('JWT_SECRET')
+	}
+
+	if (missingVars.length > 0) {
+		console.error('❌ Missing environment variables:', missingVars.join(', '))
+		console.error('⚠️  Please configure the following in Cloudflare Workers settings:')
+		missingVars.forEach(varName => {
+			console.error(`   - ${varName}`)
+		})
+		return { isValid: false, missingVars }
+	}
+
+	return { isValid: true, missingVars: [] }
+}
 
 // Rate Limit Middleware für Login
 async function rateLimitLoginMiddleware(c: Context<Env>, next: Next) {
@@ -63,6 +93,7 @@ app.post('/api/auth/login', rateLimitLoginMiddleware, async (c) => {
 		const storedPin = c.env.KIOSK_PIN
 
 		if (!storedPin) {
+			console.error('❌ KIOSK_PIN is not configured in environment variables')
 			return c.json({ error: 'Server configuration error - PIN not set' }, 500)
 		}
 
@@ -82,6 +113,7 @@ app.post('/api/auth/login', rateLimitLoginMiddleware, async (c) => {
 		// Get JWT secret from environment variable
 		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
+			console.error('❌ JWT_SECRET is not configured in environment variables')
 			return c.json({ error: 'Server configuration error - JWT_SECRET not set' }, 500)
 		}
 
@@ -121,6 +153,7 @@ app.get('/api/auth/check', async (c) => {
 	try {
 		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
+			console.error('❌ JWT_SECRET is not configured in environment variables')
 			return c.json({ authenticated: false }, 500)
 		}
 
@@ -158,6 +191,7 @@ async function authMiddleware(c: Context<Env>, next: Next) {
 	try {
 		const jwtSecret = c.env.JWT_SECRET
 		if (!jwtSecret) {
+			console.error('❌ JWT_SECRET is not configured in environment variables')
 			return c.json({ error: 'Server configuration error' }, 500)
 		}
 
@@ -172,6 +206,7 @@ async function authMiddleware(c: Context<Env>, next: Next) {
 app.all('/api/drive/*', authMiddleware, async (c) => {
 	const apiKey = c.env.GOOGLE_DRIVE_API_KEY
 	if (!apiKey) {
+		console.error('❌ GOOGLE_DRIVE_API_KEY is not configured in environment variables')
 		return c.json({ error: 'Server not configured - missing API key' }, 500)
 	}
 	const reqUrl = new URL(c.req.url)
@@ -254,17 +289,34 @@ app.all('/api/drive/*', authMiddleware, async (c) => {
 
 // Health check endpoint
 app.get('/api/health', (c) => {
+	const { isValid, missingVars } = validateEnvironment(c)
+
 	return c.json({
-		status: 'ok',
+		status: isValid ? 'ok' : 'degraded',
 		service: 'GF Kiosk Proxy',
-		timestamp: new Date().toISOString()
+		timestamp: new Date().toISOString(),
+		environment: {
+			configured: isValid,
+			missingVariables: missingVars.length > 0 ? missingVars : undefined
+		}
 	})
 })
 
 // Test endpoint for Google Drive API
 app.get('/api/test-drive', async (c) => {
-	const apiKey = c.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY'
-	const testUrl = `https://www.googleapis.com/drive/v3/files?q='REDACTED_FOLDER_ID'+in+parents&key=${apiKey}`
+	const apiKey = c.env.GOOGLE_DRIVE_API_KEY
+	const rootFolderId = c.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
+
+	if (!apiKey) {
+		console.error('❌ GOOGLE_DRIVE_API_KEY not configured')
+		return c.json({ error: 'GOOGLE_DRIVE_API_KEY not configured' }, 500)
+	}
+	if (!rootFolderId) {
+		console.error('❌ GOOGLE_DRIVE_ROOT_FOLDER_ID not configured')
+		return c.json({ error: 'GOOGLE_DRIVE_ROOT_FOLDER_ID not configured' }, 500)
+	}
+
+	const testUrl = `https://www.googleapis.com/drive/v3/files?q='${rootFolderId}'+in+parents&key=${apiKey}`
 
 	try {
 		const response = await fetch(testUrl)

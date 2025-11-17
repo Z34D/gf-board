@@ -145,7 +145,7 @@ export const useAppStore = create<AppState>()(
         interval: 'daily4am',
         nextSync: null
       },
-      googleDriveFolderId: 'REDACTED_FOLDER_ID',
+      googleDriveFolderId: import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER_ID || '',
       
       // Actions
       setSelectedLocation: async (location) => {

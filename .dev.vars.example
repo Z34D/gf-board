@@ -1,0 +1,7 @@
+# Development Environment Variables for Wrangler
+# Copy this to .dev.vars and fill in your actual values
+
+KIOSK_PIN=1234
+GOOGLE_DRIVE_API_KEY=your-google-drive-api-key-here
+GOOGLE_DRIVE_ROOT_FOLDER_ID=your-google-drive-folder-id-here
+JWT_SECRET=REDACTED_JWT_SECRET

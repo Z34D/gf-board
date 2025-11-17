@@ -13,8 +13,3 @@ enabled = true
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-
-# Environment Variables (set in Cloudflare Dashboard)
-# GOOGLE_DRIVE_API_KEY - Google Drive API key
-# KIOSK_PIN - PIN for authentication
-# JWT_SECRET - Secret for JWT token signing (use random 32+ character string)
