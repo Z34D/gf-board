@@ -22,6 +22,11 @@ export const useCursorManagement = () => {
     }, 3000)
   }
 
+  // Initial cursor hide on mount
+  useEffect(() => {
+    hideCursor()
+  }, [])
+
   // Mouse movement handler with debounce for better performance on RPi
   useEffect(() => {
     const handleMouseMove = () => {
@@ -43,6 +48,16 @@ export const useCursorManagement = () => {
         clearTimeout(debounceTimeoutRef.current)
       }
     }
+  }, [])
+
+  // Handle window focus - hide cursor when kiosk regains focus after reload
+  useEffect(() => {
+    const handleFocus = () => {
+      hideCursor()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }, [])
 
   // Cleanup
