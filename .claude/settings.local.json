@@ -4,7 +4,9 @@
       "Bash(npm run build:*)",
       "Bash(git checkout:*)",
       "Bash(cat:*)",
-      "Bash(openssl rand:*)"
+      "Bash(openssl rand:*)",
+      "Bash(wrangler secret list:*)",
+      "Bash(npm run deploy:*)"
     ],
     "deny": [],
     "ask": []

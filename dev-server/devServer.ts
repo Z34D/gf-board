@@ -6,7 +6,7 @@ const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 5000);
 async function main() {
   const jwtSecret = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
   const pin = process.env.KIOSK_PIN || '1234';
-  const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
+  const apiKey = process.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY';
   const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 'REDACTED_FOLDER_ID';
 
   console.log(`🔐 Using JWT_SECRET: ${jwtSecret.substring(0, 10)}...`);
