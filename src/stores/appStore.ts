@@ -85,10 +85,7 @@ interface AppState {
   
   // Scheduler state
   schedulerConfig: SchedulerConfig
-  
-  // Google Drive config
-  googleDriveFolderId: string
-  
+
   // Actions
   setSelectedLocation: (location: string) => Promise<void>
   setAvailableLocations: (locations: string[]) => void
@@ -145,8 +142,7 @@ export const useAppStore = create<AppState>()(
         interval: 'daily4am',
         nextSync: null
       },
-      googleDriveFolderId: import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER_ID || '',
-      
+
       // Actions
       setSelectedLocation: async (location) => {
         const { selectedLocation, clearAllOPFSFiles, schedulerConfig } = get()
@@ -193,7 +189,7 @@ export const useAppStore = create<AppState>()(
       // Google Drive & OPFS actions
       syncLocationMedia: async (location: string) => {
         console.log(`🔄 Syncing: ${location}`)
-        
+
         set(state => ({
           syncStatus: {
             ...state.syncStatus,
@@ -202,73 +198,39 @@ export const useAppStore = create<AppState>()(
             progress: 0
           }
         }))
-        
+
         try {
-          const { googleDriveFolderId } = get()
-          
-          // 1. List all folders in the main directory
-          const folders = await get().listDriveFolder(googleDriveFolderId)
-          
-          // Find shared folder and location folder
-          const sharedFolder = folders.find(f => f.name.toLowerCase() === 'shared')
-          const locationFolder = folders.find(f => f.name.toLowerCase() === location.toLowerCase())
-          
-          let allDriveFiles: MediaFile[] = []
-          
-          // 2. Get all files from Google Drive
-          if (sharedFolder) {
-            const sharedFiles = await get().listDriveFolder(sharedFolder.id)
+          // 1. Get all files for this location from backend API
+          const response = await fetch(`/api/locations/${location}/files`)
 
-            for (const driveFile of sharedFiles) {
-              // Skip files without mimeType
-              if (!driveFile.mimeType) continue
-
-              if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
-                const mediaFile: MediaFile = {
-                  id: driveFile.id,
-                  name: driveFile.name,
-                  type: driveFile.mimeType.startsWith('image/') ? 'image' : 'video',
-                  url: `https://drive.google.com/uc?id=${driveFile.id}`,
-                  size: driveFile.size || 0,
-                  localPath: driveFile.name,
-                  lastModified: driveFile.modifiedTime
-                }
-                allDriveFiles.push(mediaFile)
-              }
-            }
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Failed to fetch location files: ${response.status} - ${errorText}`)
           }
 
-          if (locationFolder) {
-            const locationFiles = await get().listDriveFolder(locationFolder.id)
+          const data = await response.json()
+          const driveFiles = data.files || []
 
-            for (const driveFile of locationFiles) {
-              // Skip files without mimeType
-              if (!driveFile.mimeType) continue
+          // 2. Convert to MediaFile format
+          const allDriveFiles: MediaFile[] = driveFiles.map((driveFile: any) => ({
+            id: driveFile.id,
+            name: driveFile.name,
+            type: driveFile.mimeType.startsWith('image/') ? 'image' as const : 'video' as const,
+            url: `https://drive.google.com/uc?id=${driveFile.id}`,
+            size: parseInt(driveFile.size) || 0,
+            localPath: driveFile.name,
+            lastModified: driveFile.modifiedTime
+          }))
 
-              if (driveFile.mimeType.startsWith('image/') || driveFile.mimeType.startsWith('video/')) {
-                const mediaFile: MediaFile = {
-                  id: driveFile.id,
-                  name: driveFile.name,
-                  type: driveFile.mimeType.startsWith('image/') ? 'image' : 'video',
-                  url: `https://drive.google.com/uc?id=${driveFile.id}`,
-                  size: driveFile.size || 0,
-                  localPath: driveFile.name,
-                  lastModified: driveFile.modifiedTime
-                }
-                allDriveFiles.push(mediaFile)
-              }
-            }
-          }
-          
           // 3. Get all local files from OPFS
           const localFiles = await get().getLocalFiles()
-          
+
           // 4. Compare and determine sync actions
           const syncActions = await get().compareFiles(allDriveFiles, localFiles)
-          
+
           // 5. Execute sync actions
           await get().executeSyncActions(syncActions)
-          
+
           // 6. Update media files list
           set(state => ({
             mediaFiles: allDriveFiles,
@@ -279,16 +241,16 @@ export const useAppStore = create<AppState>()(
               progress: 100
             }
           }))
-          
+
           // Build detailed sync summary
           const parts = []
           if (syncActions.toDownload.length > 0) parts.push(`⬇️${syncActions.toDownload.length} new`)
           if (syncActions.toUpdate.length > 0) parts.push(`🔄${syncActions.toUpdate.length} updated`)
           if (syncActions.toDelete.length > 0) parts.push(`🗑️${syncActions.toDelete.length} deleted`)
           if (syncActions.unchanged.length > 0) parts.push(`✓${syncActions.unchanged.length} unchanged`)
-          
+
           console.log(`✅ Sync complete: ${parts.join(', ')} | Total: ${allDriveFiles.length} files`)
-          
+
         } catch (error) {
           console.error(`❌ Sync failed:`, error)
           set(state => ({

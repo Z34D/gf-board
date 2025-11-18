@@ -202,6 +202,87 @@ async function authMiddleware(c: Context<Env>, next: Next) {
 	}
 }
 
+// New endpoint: List all media files for a specific location
+app.get('/api/locations/:location/files', authMiddleware, async (c) => {
+	const location = c.req.param('location')
+	const apiKey = c.env.GOOGLE_DRIVE_API_KEY
+	const rootFolderId = c.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
+
+	if (!apiKey) {
+		console.error('❌ GOOGLE_DRIVE_API_KEY not configured')
+		return c.json({ error: 'Server not configured - missing API key' }, 500)
+	}
+	if (!rootFolderId) {
+		console.error('❌ GOOGLE_DRIVE_ROOT_FOLDER_ID not configured')
+		return c.json({ error: 'Server not configured - missing root folder ID' }, 500)
+	}
+
+	try {
+		// Helper function to list folder contents
+		const listFolder = async (folderId: string) => {
+			const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${apiKey}&fields=files(id,name,mimeType,size,modifiedTime)`
+			const response = await fetch(url)
+			if (!response.ok) {
+				const errorText = await response.text()
+				throw new Error(`Drive API error: ${response.status} - ${errorText}`)
+			}
+			const data = await response.json() as { files: any[] }
+			return data.files || []
+		}
+
+		// 1. List all folders in root directory
+		const folders = await listFolder(rootFolderId)
+
+		// 2. Find shared folder and location folder
+		const sharedFolder = folders.find(f => f.name?.toLowerCase() === 'shared' && f.mimeType === 'application/vnd.google-apps.folder')
+		const locationFolder = folders.find(f => f.name?.toLowerCase() === location.toLowerCase() && f.mimeType === 'application/vnd.google-apps.folder')
+
+		const allFiles: any[] = []
+
+		// 3. Get files from Shared folder
+		if (sharedFolder) {
+			const sharedFiles = await listFolder(sharedFolder.id)
+			for (const file of sharedFiles) {
+				if (file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/')) {
+					allFiles.push({
+						id: file.id,
+						name: file.name,
+						mimeType: file.mimeType,
+						size: file.size,
+						modifiedTime: file.modifiedTime
+					})
+				}
+			}
+		}
+
+		// 4. Get files from location-specific folder
+		if (locationFolder) {
+			const locationFiles = await listFolder(locationFolder.id)
+			for (const file of locationFiles) {
+				if (file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/')) {
+					allFiles.push({
+						id: file.id,
+						name: file.name,
+						mimeType: file.mimeType,
+						size: file.size,
+						modifiedTime: file.modifiedTime
+					})
+				}
+			}
+		}
+
+		return c.json({
+			location,
+			files: allFiles,
+			count: allFiles.length
+		})
+	} catch (err) {
+		const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+		console.error(`❌ Error listing location files:`, err)
+		return c.json({ error: 'Failed to list location files', details: errorMessage }, 500)
+	}
+})
+
 // Google Drive API Proxy: leitet `/api/drive/*` an Google Drive API weiter (geschützt)
 app.all('/api/drive/*', authMiddleware, async (c) => {
 	const apiKey = c.env.GOOGLE_DRIVE_API_KEY
