@@ -6,25 +6,124 @@
  * Setup-Schritte:
  * 1. WLAN konfigurieren (NetworkManager)
  * 2. Auto-Login aktivieren (raspi-config)
- * 3. Kiosk-Autostart (ALLE METHODEN für maximale Kompatibilität)
+ * 3. Kiosk-Autostart (NUR labwc user autostart - EINE Methode!)
  * 4. Bildschirmschoner deaktivieren (raspi-config)
+ * 5. Automatische Updates deaktivieren (wichtig für Kiosk-Stabilität!)
  *
- * Autostart-Methode: SHOTGUN APPROACH (alle gleichzeitig!)
- * - ~/start_gf_kiosk.sh - Start-Script
- * - ~/.config/wayfire.ini [autostart] - Für wayfire
- * - ~/.config/labwc/autostart - Für labwc (user)
- * - /etc/xdg/labwc/autostart - Für labwc (system-wide)
+ * Autostart-Methode:
+ * - NUR ~/.config/labwc/autostart (KEINE parallelen Methoden mehr!)
+ * - Direkt in der Datei, kein separates Script
  *
- * Chromium Flags (aus Raspberry Pi Forums):
- * - --start-maximized --start-fullscreen (statt --kiosk damit F11 funktioniert!)
+ * Chromium Flags (KORRIGIERT):
+ * - --user-data-dir=$HOME/.chromium-kiosk (separates Profil, verhindert Keyring)
+ * - --password-store=basic (KEIN Keyring-Popup!)
+ * - --start-maximized --start-fullscreen (F11 funktioniert!)
+ * - --disable-restore-session-state (KEINE Wiederherstellen-Bubble!)
  * - --ozone-platform=wayland (Wayland-Support)
- * - --enable-features=OverlayScrollbar
  *
  * @param ssid - Der Name des WLAN-Netzwerks (Optional: Leer lassen zum Überspringen)
  * @param password - Das WLAN-Passwort (Optional: Leer lassen zum Überspringen)
  * @param url - Die Ziel-Website
  * @returns String containing the complete bash script
  */
+
+/**
+ * Generiert ein komplettes Cleanup-Script das ALLE Autostart-Methoden löscht.
+ * @returns String containing the complete cleanup bash script
+ */
+export function generateCompleteCleanupScript(): string {
+	return `# ================================================
+# GF-Board COMPLETE CLEANUP (GRÜNDLICH!)
+# ================================================
+# Löscht ALLE Autostart-Methoden komplett!
+
+echo "================================================"
+echo "   GF-Board COMPLETE CLEANUP"
+echo "================================================"
+echo ""
+echo "⚠️  Löscht ALLE Autostart-Konfigurationen!"
+echo ""
+
+# Stoppe ALLE Chromium-Instanzen (auch hängende)
+echo -n "Stoppe Chromium... "
+pkill -9 chromium 2>/dev/null
+sleep 2
+echo "✓"
+
+# 1. Kiosk-Script
+echo -n "Lösche ~/start_gf_kiosk.sh... "
+rm -f ~/start_gf_kiosk.sh*
+echo "✓"
+
+# 2. labwc user autostart - KOMPLETT LÖSCHEN
+echo -n "Lösche ~/.config/labwc/... "
+rm -rf ~/.config/labwc/
+echo "✓"
+
+# 3. labwc system-wide autostart - KOMPLETT BEREINIGEN
+echo -n "Bereinige /etc/xdg/labwc/autostart... "
+if sudo test -f /etc/xdg/labwc/autostart; then
+	# Lösche ALLE Backups zuerst
+	sudo rm -f /etc/xdg/labwc/autostart.backup* 2>/dev/null
+	# Lösche ALLE GF-Board und chromium Zeilen
+	sudo sed -i '/start_gf_kiosk/d' /etc/xdg/labwc/autostart
+	sudo sed -i '/GF-Board/d' /etc/xdg/labwc/autostart
+	sudo sed -i '/chromium/d' /etc/xdg/labwc/autostart
+	echo "✓"
+else
+	echo "⊘"
+fi
+
+# 4. wayfire.ini - KOMPLETT BEREINIGEN (KEIN BACKUP!)
+echo -n "Bereinige ~/.config/wayfire.ini... "
+if [ -f ~/.config/wayfire.ini ]; then
+	# Lösche alte Backups
+	rm -f ~/.config/wayfire.ini.backup* 2>/dev/null
+	# Bereinige
+	sed -i '/runme/d' ~/.config/wayfire.ini
+	sed -i '/chromium/d' ~/.config/wayfire.ini
+	sed -i '/kiosk/d' ~/.config/wayfire.ini
+	sed -i '/start_gf/d' ~/.config/wayfire.ini
+	echo "✓"
+else
+	echo "⊘"
+fi
+
+# 5. LXDE Autostart
+echo -n "Lösche LXDE autostart... "
+rm -rf ~/.config/lxsession/LXDE-pi/
+echo "✓"
+
+# 6. XDG .desktop - ALLES
+echo -n "Lösche XDG .desktop... "
+rm -rf ~/.config/autostart/
+echo "✓"
+
+# 7. systemd service
+echo -n "Lösche systemd service... "
+systemctl --user stop kiosk.service 2>/dev/null
+systemctl --user disable kiosk.service 2>/dev/null
+rm -f ~/.config/systemd/user/kiosk.service
+systemctl --user daemon-reload 2>/dev/null
+echo "✓"
+
+# 8. Chromium Kiosk User Data (falls vorhanden)
+echo -n "Lösche Chromium Kiosk Profil... "
+rm -rf ~/.chromium-kiosk 2>/dev/null
+echo "✓"
+
+echo ""
+echo "================================================"
+echo "   ✓ ALLES KOMPLETT GELÖSCHT!"
+echo "================================================"
+echo ""
+echo "Prüfe ob noch Chromium läuft:"
+ps aux | grep chromium | grep -v grep || echo "✓ Kein Chromium läuft mehr"
+echo ""
+echo "Jetzt Setup-Script neu ausführen!"
+echo "================================================"
+`;
+}
 
 export function generatePiSetupScript(ssid: string, password: string, url: string): string {
 	// Wir escapen einfache Anführungszeichen für Bash, um Injection zu vermeiden
@@ -91,8 +190,8 @@ else
 	AUTOLOGIN_STATUS="FAIL"
 fi
 
-# 3. AUTOSTART EINRICHTEN (ALLE METHODEN - SHOTGUN APPROACH!)
-echo -n "Erstelle Kiosk-Autostart (mehrere Methoden)... "
+# 3. AUTOSTART EINRICHTEN (NUR EINE METHODE!)
+echo -n "Erstelle Kiosk-Autostart... "
 
 # Finde den richtigen Chromium-Befehl (chromium ODER chromium-browser)
 if command -v chromium >/dev/null 2>&1; then
@@ -104,49 +203,37 @@ else
 	CHROMIUM_CMD="chromium-browser"
 fi
 
-# Erstelle Start-Script mit dem richtigen Befehl
-# WICHTIG: --start-fullscreen statt --kiosk damit F11 funktioniert!
-KIOSK_SCRIPT="$HOME/start_gf_kiosk.sh"
-echo "#!/bin/bash" > "$KIOSK_SCRIPT"
-echo "$CHROMIUM_CMD --start-maximized --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --ozone-platform=wayland --enable-features=OverlayScrollbar --disable-features=Translate '$TARGET_URL' &" >> "$KIOSK_SCRIPT"
-chmod +x "$KIOSK_SCRIPT"
+# Erstelle labwc autostart Verzeichnis
+LABWC_DIR="$HOME/.config/labwc"
+mkdir -p "$LABWC_DIR"
 
-# METHODE 1: wayfire.ini (falls wayfire läuft)
-WAYFIRE_CONFIG="$HOME/.config/wayfire.ini"
-if [ ! -f "$WAYFIRE_CONFIG" ]; then
-	touch "$WAYFIRE_CONFIG"
-fi
-# Entferne alte Einträge
-sed -i '/^runme/d' "$WAYFIRE_CONFIG" 2>/dev/null
-sed -i '/^kiosk/d' "$WAYFIRE_CONFIG" 2>/dev/null
-sed -i '/^chromium/d' "$WAYFIRE_CONFIG" 2>/dev/null
-# Füge [autostart] Section hinzu falls nicht vorhanden
-if ! grep -q "\\[autostart\\]" "$WAYFIRE_CONFIG"; then
-	echo "" >> "$WAYFIRE_CONFIG"
-	echo "[autostart]" >> "$WAYFIRE_CONFIG"
-fi
-# Füge Script hinzu
-sed -i "/\\[autostart\\]/a runme = $KIOSK_SCRIPT" "$WAYFIRE_CONFIG"
+# Erstelle autostart Datei - NUR EINE METHODE!
+# WICHTIGE FLAGS:
+# - --user-data-dir: Separates Profil (verhindert Keyring-Popup)
+# - --password-store=basic: Kein Keyring!
+# - --start-fullscreen: F11 funktioniert (nicht --kiosk!)
+# - --disable-restore-session-state: Keine Wiederherstellen-Bubble!
+# PRE-START CLEANUP:
+# - Setzt "exit_type" auf "Normal" und "exited_cleanly" auf true
+# - Verhindert "Sitzung wiederherstellen?"-Popup nach Absturz
+cat > "$LABWC_DIR/autostart" << 'LABWC_EOF'
+#!/bin/sh
+# GF-Board Kiosk Autostart
 
-# METHODE 2: labwc user autostart
-LABWC_USER="$HOME/.config/labwc"
-mkdir -p "$LABWC_USER"
-echo "$KIOSK_SCRIPT" > "$LABWC_USER/autostart"
-chmod +x "$LABWC_USER/autostart"
-
-# METHODE 3: labwc system-wide autostart (mit sudo)
-if sudo test -d /etc/xdg/labwc 2>/dev/null; then
-	echo "" | sudo tee -a /etc/xdg/labwc/autostart >/dev/null
-	echo "# GF-Board Kiosk" | sudo tee -a /etc/xdg/labwc/autostart >/dev/null
-	echo "$KIOSK_SCRIPT" | sudo tee -a /etc/xdg/labwc/autostart >/dev/null
+# CLEANUP: Chromium Crash-Flags zurücksetzen (verhindert Restore-Bubble)
+PREFS="\$HOME/.chromium-kiosk/Default/Preferences"
+if [ -f "\$PREFS" ]; then
+  sed -i 's/"exit_type":"[^"]*"/"exit_type":"Normal"/g' "\$PREFS"
+  sed -i 's/"exited_cleanly":[^,}]*/"exited_cleanly":true/g' "\$PREFS"
 fi
 
-# Cleanup alte fehlerhafte Methoden
-rm -f "$HOME/.config/lxsession/LXDE-pi/autostart" >/dev/null 2>&1
-rm -f "$HOME/.config/autostart/kiosk.desktop" >/dev/null 2>&1
+# Starte Chromium mit Anti-Restore-Flags
+LABWC_EOF
+echo "$CHROMIUM_CMD --user-data-dir=\$HOME/.chromium-kiosk --password-store=basic --use-mock-keychain --start-maximized --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --disable-session-crashed-bubble --disable-restore-session-state --disable-background-mode --disable-backgrounding-occluded-windows --disable-sync --ozone-platform=wayland --enable-features=OverlayScrollbar --disable-features=Translate '$TARGET_URL' &" >> "$LABWC_DIR/autostart"
+chmod +x "$LABWC_DIR/autostart"
 
 # Verifiziere
-if [ -f "$KIOSK_SCRIPT" ]; then
+if [ -f "$LABWC_DIR/autostart" ]; then
 	echo -e "\${GREEN}[OK]\${NC}"
 	AUTOSTART_STATUS="OK"
 else
@@ -163,6 +250,19 @@ else
 	echo -e "\${RED}[WARNUNG]\${NC}"
 	BLANKING_STATUS="WARN"
 fi
+
+# 5. AUTOMATISCHE UPDATES DEAKTIVIEREN (wichtig für Kiosk!)
+echo -n "Deaktiviere automatische Updates... "
+# Stoppe und deaktiviere apt-daily Timer
+sudo systemctl stop apt-daily.timer >/dev/null 2>&1
+sudo systemctl disable apt-daily.timer >/dev/null 2>&1
+sudo systemctl stop apt-daily-upgrade.timer >/dev/null 2>&1
+sudo systemctl disable apt-daily-upgrade.timer >/dev/null 2>&1
+# Deaktiviere unattended-upgrades falls installiert
+sudo systemctl stop unattended-upgrades >/dev/null 2>&1
+sudo systemctl disable unattended-upgrades >/dev/null 2>&1
+echo -e "\${GREEN}[OK]\${NC}"
+UPDATES_STATUS="OK"
 
 echo ""
 echo "================================================"
@@ -184,9 +284,9 @@ else
 fi
 
 if [ "$AUTOSTART_STATUS" == "OK" ]; then
-	echo -e "Autostart (Multi):   \${GREEN}✓ KONFIGURIERT\${NC} ($TARGET_URL)"
+	echo -e "Autostart (labwc):   \${GREEN}✓ KONFIGURIERT\${NC} ($TARGET_URL)"
 else
-	echo -e "Autostart (Multi):   \${RED}✗ FEHLGESCHLAGEN\${NC}"
+	echo -e "Autostart (labwc):   \${RED}✗ FEHLGESCHLAGEN\${NC}"
 fi
 
 if [ "$BLANKING_STATUS" == "OK" ]; then
@@ -195,17 +295,23 @@ else
 	echo -e "Bildschirmschoner:   \${YELLOW}⚠ WARNUNG\${NC}"
 fi
 
+if [ "$UPDATES_STATUS" == "OK" ]; then
+	echo -e "Auto-Updates:        \${GREEN}✓ DEAKTIVIERT\${NC}"
+else
+	echo -e "Auto-Updates:        \${YELLOW}⚠ WARNUNG\${NC}"
+fi
+
 echo "================================================"
 echo ""
-echo "HINWEIS: Nach dem Neustart startet Chromium automatisch."
+echo "✓ Setup abgeschlossen!"
 echo ""
-echo "Falls Chromium NICHT startet, teste manuell:"
-echo "  ~/start_gf_kiosk.sh"
+echo "WICHTIG:"
+echo "  • Chromium startet automatisch nach Neustart"
+echo "  • F11 drücken = Kiosk-Modus verlassen"
+echo "  • F11 nochmal = Zurück in Fullscreen"
 echo ""
-echo "Prüfe welche Autostart-Dateien existieren:"
-echo "  ls -la ~/.config/wayfire.ini"
-echo "  ls -la ~/.config/labwc/autostart"
-echo "  cat /etc/xdg/labwc/autostart"
+echo "Falls Chromium NICHT startet:"
+echo "  cat ~/.config/labwc/autostart"
 echo ""
 echo "================================================"
 echo ""

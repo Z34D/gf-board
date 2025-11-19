@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { generatePiSetupScript } from '../helper/create-installer'
+import { generatePiSetupScript, generateCompleteCleanupScript } from '../helper/create-installer'
 
 export const Route = createFileRoute('/install')({
   component: InstallPage,
@@ -11,7 +11,9 @@ function InstallPage() {
   const [password, setPassword] = useState('')
   const [url, setUrl] = useState('https://gf-kiosk.brandwork.tech/')
   const [generatedScript, setGeneratedScript] = useState('')
+  const [cleanupScript, setCleanupScript] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showCleanup, setShowCleanup] = useState(false)
 
   const handleGenerate = () => {
     if (!url) {
@@ -21,6 +23,24 @@ function InstallPage() {
 
     const script = generatePiSetupScript(ssid, password, url)
     setGeneratedScript(script)
+    setShowCleanup(false)
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(script)
+      .then(() => {
+        setCopySuccess(true)
+        setTimeout(() => setCopySuccess(false), 3000)
+      })
+      .catch((err) => {
+        console.error('Fehler beim Kopieren:', err)
+      })
+  }
+
+  const handleCleanup = () => {
+    const script = generateCompleteCleanupScript()
+    setCleanupScript(script)
+    setShowCleanup(true)
+    setGeneratedScript('')
 
     // Copy to clipboard
     navigator.clipboard.writeText(script)
@@ -127,13 +147,21 @@ function InstallPage() {
             </div>
           </div>
 
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            className="mt-6 w-full px-6 py-3 bg-gradient-to-b from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-xl shadow-red-600/40 ring-1 ring-white/10"
-          >
-            Script Generieren & Kopieren
-          </button>
+          {/* Generate Buttons */}
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={handleGenerate}
+              className="flex-1 px-6 py-3 bg-gradient-to-b from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-xl shadow-red-600/40 ring-1 ring-white/10"
+            >
+              Setup Script
+            </button>
+            <button
+              onClick={handleCleanup}
+              className="flex-1 px-6 py-3 bg-gradient-to-b from-orange-600 to-orange-700 text-white font-semibold rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all duration-300 shadow-xl shadow-orange-600/40 ring-1 ring-white/10"
+            >
+              Complete Cleanup
+            </button>
+          </div>
 
           {/* Copy Success Message */}
           {copySuccess && (
@@ -147,15 +175,16 @@ function InstallPage() {
         </div>
 
         {/* Generated Script Display */}
-        {generatedScript && (
+        {(generatedScript || cleanupScript) && (
           <div className="bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 p-6 rounded-lg w-full shadow-[0_12px_40px_rgba(0,0,0,.4)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-[.14em]">
-                Generiertes Script
+                {showCleanup ? 'Cleanup Script' : 'Setup Script'}
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(generatedScript)
+                  const scriptToCopy = showCleanup ? cleanupScript : generatedScript
+                  navigator.clipboard.writeText(scriptToCopy)
                   setCopySuccess(true)
                   setTimeout(() => setCopySuccess(false), 3000)
                 }}
@@ -166,12 +195,18 @@ function InstallPage() {
             </div>
             <textarea
               readOnly
-              value={generatedScript}
+              value={showCleanup ? cleanupScript : generatedScript}
               className="w-full h-64 px-4 py-3 bg-neutral-950 text-gray-300 font-mono text-xs border border-white/15 rounded-md shadow-inner resize-none"
             />
-            <div className="mt-3 text-xs text-gray-400 bg-emerald-950/50 p-3 rounded border border-emerald-500/20">
-              ✓ Drücke F11 um den Kiosk-Modus zu verlassen!
-            </div>
+            {showCleanup ? (
+              <div className="mt-3 text-xs text-gray-400 bg-orange-950/50 p-3 rounded border border-orange-500/20">
+                ⚠️ Löscht ALLE Autostart-Konfigurationen! Danach Setup-Script neu ausführen.
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-gray-400 bg-emerald-950/50 p-3 rounded border border-emerald-500/20">
+                ✓ Drücke F11 um den Kiosk-Modus zu verlassen!
+              </div>
+            )}
           </div>
         )}
       </div>
