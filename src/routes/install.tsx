@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { generatePiSetupScript, generateDebugScript } from '../helper/create-installer'
+import { generatePiSetupScript } from '../helper/create-installer'
 
 export const Route = createFileRoute('/install')({
   component: InstallPage,
@@ -11,9 +11,7 @@ function InstallPage() {
   const [password, setPassword] = useState('')
   const [url, setUrl] = useState('https://gf-kiosk.brandwork.tech/')
   const [generatedScript, setGeneratedScript] = useState('')
-  const [debugScript, setDebugScript] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
-  const [showDebug, setShowDebug] = useState(false)
 
   const handleGenerate = () => {
     if (!url) {
@@ -23,24 +21,6 @@ function InstallPage() {
 
     const script = generatePiSetupScript(ssid, password, url)
     setGeneratedScript(script)
-    setShowDebug(false)
-
-    // Copy to clipboard
-    navigator.clipboard.writeText(script)
-      .then(() => {
-        setCopySuccess(true)
-        setTimeout(() => setCopySuccess(false), 3000)
-      })
-      .catch((err) => {
-        console.error('Fehler beim Kopieren:', err)
-      })
-  }
-
-  const handleGenerateDebug = () => {
-    const script = generateDebugScript()
-    setDebugScript(script)
-    setShowDebug(true)
-    setGeneratedScript('')
 
     // Copy to clipboard
     navigator.clipboard.writeText(script)
@@ -147,21 +127,13 @@ function InstallPage() {
             </div>
           </div>
 
-          {/* Generate Buttons */}
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleGenerate}
-              className="flex-1 px-6 py-3 bg-gradient-to-b from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-xl shadow-red-600/40 ring-1 ring-white/10"
-            >
-              Setup Script
-            </button>
-            <button
-              onClick={handleGenerateDebug}
-              className="flex-1 px-6 py-3 bg-gradient-to-b from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-xl shadow-blue-600/40 ring-1 ring-white/10"
-            >
-              Debug Script
-            </button>
-          </div>
+          {/* Generate Button */}
+          <button
+            onClick={handleGenerate}
+            className="mt-6 w-full px-6 py-3 bg-gradient-to-b from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-xl shadow-red-600/40 ring-1 ring-white/10"
+          >
+            Script Generieren & Kopieren
+          </button>
 
           {/* Copy Success Message */}
           {copySuccess && (
@@ -175,16 +147,15 @@ function InstallPage() {
         </div>
 
         {/* Generated Script Display */}
-        {(generatedScript || debugScript) && (
+        {generatedScript && (
           <div className="bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 p-6 rounded-lg w-full shadow-[0_12px_40px_rgba(0,0,0,.4)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-[.14em]">
-                {showDebug ? 'Debug Script' : 'Setup Script'}
+                Generiertes Script
               </div>
               <button
                 onClick={() => {
-                  const scriptToCopy = showDebug ? debugScript : generatedScript
-                  navigator.clipboard.writeText(scriptToCopy)
+                  navigator.clipboard.writeText(generatedScript)
                   setCopySuccess(true)
                   setTimeout(() => setCopySuccess(false), 3000)
                 }}
@@ -195,14 +166,12 @@ function InstallPage() {
             </div>
             <textarea
               readOnly
-              value={showDebug ? debugScript : generatedScript}
+              value={generatedScript}
               className="w-full h-64 px-4 py-3 bg-neutral-950 text-gray-300 font-mono text-xs border border-white/15 rounded-md shadow-inner resize-none"
             />
-            {showDebug && (
-              <div className="mt-3 text-xs text-gray-400">
-                Paste das komplette Script auf dem Pi und sende mir die Ausgabe.
-              </div>
-            )}
+            <div className="mt-3 text-xs text-gray-400 bg-emerald-950/50 p-3 rounded border border-emerald-500/20">
+              ✓ Drücke F11 um den Kiosk-Modus zu verlassen!
+            </div>
           </div>
         )}
       </div>

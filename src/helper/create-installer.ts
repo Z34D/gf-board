@@ -16,7 +16,7 @@
  * - /etc/xdg/labwc/autostart - Für labwc (system-wide)
  *
  * Chromium Flags (aus Raspberry Pi Forums):
- * - --start-maximized --kiosk (REIHENFOLGE WICHTIG!)
+ * - --start-maximized --start-fullscreen (statt --kiosk damit F11 funktioniert!)
  * - --ozone-platform=wayland (Wayland-Support)
  * - --enable-features=OverlayScrollbar
  *
@@ -25,112 +25,6 @@
  * @param url - Die Ziel-Website
  * @returns String containing the complete bash script
  */
-/**
- * Generiert ein Debug-Script um herauszufinden welcher Compositor läuft
- * und welche Autostart-Dateien existieren.
- * @returns String containing the debug bash commands
- */
-export function generateDebugScript(): string {
-	return `# ================================================
-# GF-Board Debug Script - Compositor & Autostart Detection
-# ================================================
-# Kopiere alles und paste es in die Pi-Console
-
-echo "================================================"
-echo "  GF-Board System-Diagnose"
-echo "================================================"
-echo ""
-
-# 1. Display Server
-echo "1. Display Server:"
-echo "   XDG_SESSION_TYPE: $XDG_SESSION_TYPE"
-echo ""
-
-# 2. Laufender Compositor
-echo "2. Laufender Compositor:"
-ps aux | grep -E "wayfire|labwc|X11|Xorg" | grep -v grep
-echo ""
-
-# 3. OS Version
-echo "3. Raspberry Pi OS Version:"
-cat /etc/os-release | grep -E "PRETTY_NAME|VERSION"
-echo ""
-
-# 4. Existierende Config-Dateien
-echo "4. Config-Dateien Check:"
-echo ""
-
-echo "   ~/.config/wayfire.ini:"
-if [ -f "$HOME/.config/wayfire.ini" ]; then
-	echo "   ✓ EXISTIERT"
-else
-	echo "   ✗ NICHT VORHANDEN"
-fi
-echo ""
-
-echo "   ~/.config/labwc/:"
-if [ -d "$HOME/.config/labwc" ]; then
-	echo "   ✓ VERZEICHNIS EXISTIERT"
-	ls -la "$HOME/.config/labwc/" 2>/dev/null
-else
-	echo "   ✗ NICHT VORHANDEN"
-fi
-echo ""
-
-echo "   ~/.config/lxsession/LXDE-pi/:"
-if [ -d "$HOME/.config/lxsession/LXDE-pi" ]; then
-	echo "   ✓ VERZEICHNIS EXISTIERT"
-else
-	echo "   ✗ NICHT VORHANDEN"
-fi
-echo ""
-
-# 5. Autostart-Datei Inhalte
-echo "5. Autostart-Datei Inhalte:"
-echo ""
-
-echo "=== ~/.config/labwc/autostart ==="
-if [ -f "$HOME/.config/labwc/autostart" ]; then
-	cat "$HOME/.config/labwc/autostart"
-else
-	echo "(Datei existiert nicht)"
-fi
-echo ""
-
-echo "=== ~/.config/wayfire.ini [autostart] Section ==="
-if [ -f "$HOME/.config/wayfire.ini" ]; then
-	grep -A 20 "\\[autostart\\]" "$HOME/.config/wayfire.ini" 2>/dev/null || echo "(Keine [autostart] section gefunden)"
-else
-	echo "(Datei existiert nicht)"
-fi
-echo ""
-
-echo "=== ~/.config/lxsession/LXDE-pi/autostart ==="
-if [ -f "$HOME/.config/lxsession/LXDE-pi/autostart" ]; then
-	cat "$HOME/.config/lxsession/LXDE-pi/autostart"
-else
-	echo "(Datei existiert nicht)"
-fi
-echo ""
-
-# 6. Kiosk-Script falls vorhanden
-echo "6. GF-Board Kiosk-Script:"
-echo ""
-if [ -f "$HOME/start_gf_kiosk.sh" ]; then
-	echo "   ✓ ~/start_gf_kiosk.sh EXISTIERT"
-	echo "   Inhalt:"
-	cat "$HOME/start_gf_kiosk.sh"
-else
-	echo "   ✗ ~/start_gf_kiosk.sh NICHT GEFUNDEN"
-fi
-echo ""
-
-echo "================================================"
-echo "  Diagnose abgeschlossen!"
-echo "  Kopiere die gesamte Ausgabe und sende sie."
-echo "================================================"
-`;
-}
 
 export function generatePiSetupScript(ssid: string, password: string, url: string): string {
 	// Wir escapen einfache Anführungszeichen für Bash, um Injection zu vermeiden
@@ -211,9 +105,10 @@ else
 fi
 
 # Erstelle Start-Script mit dem richtigen Befehl
+# WICHTIG: --start-fullscreen statt --kiosk damit F11 funktioniert!
 KIOSK_SCRIPT="$HOME/start_gf_kiosk.sh"
 echo "#!/bin/bash" > "$KIOSK_SCRIPT"
-echo "$CHROMIUM_CMD --start-maximized --kiosk --noerrdialogs --disable-infobars --no-first-run --ozone-platform=wayland --enable-features=OverlayScrollbar --disable-features=Translate '$TARGET_URL' &" >> "$KIOSK_SCRIPT"
+echo "$CHROMIUM_CMD --start-maximized --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --ozone-platform=wayland --enable-features=OverlayScrollbar --disable-features=Translate '$TARGET_URL' &" >> "$KIOSK_SCRIPT"
 chmod +x "$KIOSK_SCRIPT"
 
 # METHODE 1: wayfire.ini (falls wayfire läuft)
