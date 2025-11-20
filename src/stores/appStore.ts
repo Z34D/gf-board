@@ -98,7 +98,7 @@ interface AppState {
   
   // Google Drive & OPFS actions
   syncLocationMedia: (location: string) => Promise<void>
-  downloadFileFromDrive: (fileId: string, fileName: string) => Promise<void>
+  downloadFileFromDrive: (fileId: string, fileName: string, retryCount?: number) => Promise<void>
   listDriveFolder: (folderId: string) => Promise<any[]>
   saveToOPFS: (file: File, path: string) => Promise<void>
   loadFromOPFS: (path: string) => Promise<File | null>
