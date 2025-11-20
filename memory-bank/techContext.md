@@ -25,3 +25,8 @@
 - `npm run dev`: Start development server
 - `npm run build`: Build for production
 - `npm run deploy`: Deploy to Cloudflare Workers
+
+## Kiosk Operation
+- Daily sync: 1:00 AM (configurable)
+- Auto-reload: 3:00 AM (prevents conflicts)
+- 2-hour gap ensures reliability

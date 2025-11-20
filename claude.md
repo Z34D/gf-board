@@ -5,7 +5,7 @@
 **Project Root:** `C:\Users\cgzie\Documents\repo\gf-board\`
 **Repository:** Git-based (main branch)
 **Status:** Production-ready
-**Last Updated:** November 2025
+**Last Updated:** November 20, 2025
 
 ---
 
@@ -37,13 +37,13 @@ GF-Board is a digital signage system designed for fitness facilities (gyms). It 
   - Flieden, Neuhof, Gersfeld, Schlitz, Eichenzell
 - **Offline-First:** Uses OPFS (Origin Private File System) to cache files locally
 - **Smart Sync:** Intelligent synchronization with Google Drive
-  - Configurable intervals: 5 min, 4 hours, 8 hours, or daily at 4am
+  - Configurable intervals: 5 min, 4 hours, 8 hours, or daily at 1am
   - Only downloads/updates changed files
   - Streams large files to prevent RAM overflow on RPi
 - **Secure Access:** PIN-based authentication with JWT tokens
 - **Kiosk Mode:** Auto-hiding cursor, full-screen presentation
 - **Responsive:** Works on various display sizes and resolutions
-- **Auto-Refresh:** Automatic page reload at midnight for data freshness
+- **Auto-Refresh:** Automatic page reload at 3am for data freshness
 
 ---
 
@@ -155,7 +155,7 @@ gf-board/
 ├── public/
 │   └── gf-favicon.svg
 ├── dist/                              # Build output
-├── index.html                         # Entry point (includes midnight reload)
+├── index.html                         # Entry point (includes 3am reload)
 ├── vite.config.ts
 ├── wrangler.toml                      # Cloudflare config
 ├── tsconfig.base.json
@@ -597,7 +597,25 @@ npm run deploy
 
 ## Recent Fixes & Improvements
 
-### 1. Cursor Management for RPi (Latest)
+### 1. Scheduler Timing Optimization (Latest - November 2025)
+
+**Files:**
+- `src/stores/appStore.ts` - Daily sync time
+- `index.html` - Auto-reload time
+
+**Changes:**
+- Changed daily sync from 4am to 1am
+- Changed auto-reload from midnight to 3am
+
+**Rationale:**
+- 1am sync ensures fresh content before 3am reload
+- 3am reload provides clean slate for daily operation
+- 2-hour gap between sync and reload prevents conflicts
+- Optimized for off-peak hours
+
+**Impact:** Better reliability and content freshness for 24/7 kiosk operation
+
+### 2. Cursor Management for RPi
 
 **File:** `src/components/slideshow/hooks/useCursorManagement.ts`
 
@@ -802,7 +820,7 @@ GOOGLE_DRIVE_API_KEY=test-key
 | `vite.config.ts` | Vite build config |
 | `wrangler.toml` | Cloudflare Workers config |
 | `tsconfig.base.json` | Base TypeScript config |
-| `index.html` | Entry point + midnight reload |
+| `index.html` | Entry point + 3am reload |
 
 ---
 
@@ -913,6 +931,6 @@ watch -n 1 'free -h && echo "---" && top -bn1 | head -12'
 
 **End of Documentation**
 
-Last Updated: November 2025
+Last Updated: November 20, 2025
 Maintained by: Development Team
 Contact: [Your contact info]

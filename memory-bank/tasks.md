@@ -1,6 +1,16 @@
 # Tasks
 
-## Current Task: Hide mouse cursor automatically in slideshow
+## Current Task: Optimize scheduler timings
+Status: Completed
+
+### Subtasks
+- [X] Change daily sync time from 4am to 1am in appStore.ts
+- [X] Change auto-reload from midnight to 3am in index.html
+- [X] Update CLAUDE.md documentation with new timings
+- [X] Update memory bank with changes
+- [X] Add implementation details to activeContext.md
+
+## Previous Task: Hide mouse cursor automatically in slideshow
 Status: Completed
 
 ### Subtasks
@@ -37,6 +47,7 @@ Status: Completed
 - [X] Add volume: 0 to Plyr config
 
 ## Completed Tasks
+- [X] Optimize scheduler timings (1am sync, 3am reload) - Completed on 2025-11-20
 - [X] Hide mouse cursor automatically in slideshow - Completed on 2025-01-20
 - [X] Wait for sync completion before showing slideshow - Completed on 2025-10-20
 - [X] Console log cleanup for better readability - Completed on 2025-10-20

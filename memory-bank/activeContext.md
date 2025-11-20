@@ -1,9 +1,11 @@
 # Active Context
 
 ## Current Focus
-Added automatic cursor hiding for cleaner kiosk experience - cursor hides during slideshow and shows temporarily on mouse movement or keyboard use.
+Optimized scheduler timings for better 24/7 kiosk operation - daily sync moved to 1am and auto-reload to 3am.
 
 ## Recent Changes
+- Optimized scheduler timing: daily sync at 1am, auto-reload at 3am (Nov 20, 2025)
+- 2-hour gap between sync and reload prevents conflicts
 - Added automatic cursor hiding for cleaner kiosk experience
 - Fixed slideshow not updating after sync - now properly re-initializes GLightbox with new content
 - Slideshow now waits for sync completion before starting
@@ -19,7 +21,21 @@ Added automatic cursor hiding for cleaner kiosk experience - cursor hides during
 
 ## Recent Implementation Details
 
-### Automatic Cursor Hiding (Latest)
+### Scheduler Timing Optimization (Latest - November 20, 2025)
+- **Issue**: Previous 4am sync and midnight reload caused potential timing conflicts
+- **Solution**: Moved daily sync to 1am and auto-reload to 3am for better separation
+- **Changes Made**:
+  - Updated `appStore.ts` line 581: `setHours(1, 0, 0, 0)` for 1am sync
+  - Updated `index.html` script: Changed from midnight (24:00) to 3am reload
+  - Added logic to check if 3am has passed today and schedule for next day
+  - Updated all related documentation and comments
+- **Benefits**:
+  - 2-hour gap between sync (1am) and reload (3am) prevents conflicts
+  - Content syncs before page reload, ensuring freshness
+  - Both operations during off-peak hours (1-3am)
+- **Result**: More reliable 24/7 kiosk operation with guaranteed fresh content
+
+### Automatic Cursor Hiding
 - **Issue**: Mouse cursor visible during slideshow creates distraction in kiosk environment
 - **Solution**: Implement intelligent cursor hiding with temporary show on interaction
 - **Changes Made**:
