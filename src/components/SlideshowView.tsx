@@ -46,7 +46,7 @@ const SlideshowView: React.FC = () => {
   // Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Allow logout (L key) always, even without slides
+      // Allow returning to location selection (L key) always, even without slides
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault()
         clearSelectedLocation()

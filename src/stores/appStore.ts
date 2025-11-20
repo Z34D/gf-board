@@ -98,7 +98,7 @@ interface AppState {
   
   // Google Drive & OPFS actions
   syncLocationMedia: (location: string) => Promise<void>
-  downloadFileFromDrive: (fileId: string, fileName: string) => Promise<void>
+  downloadFileFromDrive: (fileId: string, fileName: string, retryCount?: number) => Promise<void>
   listDriveFolder: (folderId: string) => Promise<any[]>
   saveToOPFS: (file: File, path: string) => Promise<void>
   loadFromOPFS: (path: string) => Promise<File | null>
@@ -282,23 +282,74 @@ export const useAppStore = create<AppState>()(
         }
       },
       
-      downloadFileFromDrive: async (fileId: string, fileName: string) => {
+      downloadFileFromDrive: async (fileId: string, fileName: string, retryCount = 0) => {
+        const MAX_RETRY_DELAY_MS = 15 * 60 * 1000 // 15 minutes max
+        const INITIAL_RETRY_DELAY_MS = 60000 // Start with 1 minute
+
         try {
+          console.log(`⬇️ Downloading: ${fileName}${retryCount > 0 ? ` (Retry #${retryCount})` : ''}`)
           const downloadUrl = `/api/drive/files/${fileId}?alt=media`
           const response = await fetch(downloadUrl)
-          
+
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-          
-          const blob = await response.blob()
-          const file = new File([blob], fileName, { type: blob.type })
-          
+
+          // Get total size for progress tracking
+          const contentLength = response.headers.get('content-length')
+          const totalSize = contentLength ? parseInt(contentLength) : 0
+
+          if (!response.body) {
+            throw new Error('Response body is null')
+          }
+
+          // Stream with progress logging
+          const reader = response.body.getReader()
+          const chunks: Uint8Array[] = []
+          let downloadedSize = 0
+          let lastLoggedPercent = 0
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            chunks.push(value)
+            downloadedSize += value.length
+
+            // Log progress every 10%
+            if (totalSize > 0) {
+              const percent = Math.floor((downloadedSize / totalSize) * 100)
+              if (percent >= lastLoggedPercent + 10) {
+                const downloadedMB = (downloadedSize / 1024 / 1024).toFixed(1)
+                const totalMB = (totalSize / 1024 / 1024).toFixed(1)
+                console.log(`📥 ${fileName}: ${percent}% (${downloadedMB}MB / ${totalMB}MB)`)
+                lastLoggedPercent = percent
+              }
+            }
+          }
+
+          const blob = new Blob(chunks)
+          const file = new File([blob], fileName, { type: response.headers.get('content-type') || 'application/octet-stream' })
+
+          console.log(`💾 Saving: ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`)
           await get().saveToOPFS(file, fileName)
-          
+          console.log(`✅ Downloaded: ${fileName}`)
+
         } catch (error) {
-          console.error(`❌ Download failed: ${fileName}`, error)
-          throw error
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          console.error(`❌ Download failed: ${fileName} - ${errorMessage}`)
+
+          // Exponential backoff: 1min, 2min, 4min, 8min, 15min (capped)
+          const exponentialDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount)
+          const delayMs = Math.min(exponentialDelay, MAX_RETRY_DELAY_MS)
+          const waitSeconds = Math.round(delayMs / 1000)
+
+          console.log(`⏳ Retrying in ${waitSeconds}s... (Attempt #${retryCount + 1})`)
+
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+
+          // Infinite retry
+          return get().downloadFileFromDrive(fileId, fileName, retryCount + 1)
         }
       },
       

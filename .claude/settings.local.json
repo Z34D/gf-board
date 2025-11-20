@@ -6,7 +6,8 @@
       "Bash(cat:*)",
       "Bash(openssl rand:*)",
       "Bash(wrangler secret list:*)",
-      "Bash(npm run deploy:*)"
+      "Bash(npm run deploy:*)",
+      "Bash(bun run deploy:*)"
     ],
     "deny": [],
     "ask": []

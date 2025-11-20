@@ -615,7 +615,62 @@ npm run deploy
 
 **Impact:** Better reliability and content freshness for 24/7 kiosk operation
 
-### 2. Cursor Management for RPi
+### 2. PIN Auto-Login & Persistence (Latest - Nov 2025)
+
+**Files:**
+- `src/components/LoginPage.tsx`
+- `src/components/SlideshowView.tsx`
+
+**Features Added:**
+- PIN is saved to localStorage (`gf-kiosk-pin`) on successful login
+- Auto-login on page load if saved PIN exists
+- PIN persists across page reloads and browser restarts
+- PIN is cleared only if it becomes invalid (e.g., admin changes PIN)
+
+**IMPORTANT - Kiosk Behavior:**
+- **NO LOGOUT FUNCTIONALITY** - This is a kiosk, not a user application
+- L-key returns to location selection dashboard but **DOES NOT** clear the PIN
+- Once authenticated, the kiosk stays authenticated indefinitely
+- To clear PIN manually: `localStorage.removeItem('gf-kiosk-pin')` in DevTools
+
+**Why:** Kiosks should not require re-authentication on every restart. Bot protection only, not user sessions.
+
+### 3. Infinite Retry with Exponential Backoff (Nov 2025)
+
+**File:** `src/stores/appStore.ts` (downloadFileFromDrive function)
+
+**Features:**
+- Infinite retry attempts for failed downloads (no max limit)
+- Exponential backoff: 1min → 2min → 4min → 8min → 15min (capped at 15min)
+- Progress logging every 10% during download
+- Detailed console logs for debugging
+
+**Console Output Example:**
+```
+⬇️ Downloading: Gersfeld_FHD.mp4
+📥 Gersfeld_FHD.mp4: 10% (8.6MB / 86.3MB)
+📥 Gersfeld_FHD.mp4: 20% (17.3MB / 86.3MB)
+...
+💾 Saving: Gersfeld_FHD.mp4 (86.32MB)
+✅ Downloaded: Gersfeld_FHD.mp4
+```
+
+**On Error:**
+```
+❌ Download failed: filename.mp4 - ERR_QUIC_PROTOCOL_ERROR
+⏳ Retrying in 60s... (Attempt #1)
+⬇️ Downloading: filename.mp4 (Retry #1)
+```
+
+**Why:** Google Drive and Cloudflare occasionally have temporary network issues. Infinite retries ensure 24/7 kiosk operation without manual intervention.
+
+**Technical Details:**
+- Uses ReadableStream with progress tracking
+- Streams data in chunks to avoid memory issues on RPi
+- Each chunk triggers progress calculation
+- Blob reassembled from chunks after complete download
+
+### 4. Cursor Management for RPi
 
 **File:** `src/components/slideshow/hooks/useCursorManagement.ts`
 
@@ -626,7 +681,7 @@ npm run deploy
 
 **Why:** RPi CPU is limited; debouncing reduces event processing
 
-### 2. Video Playback Race Condition Fix
+### 5. Video Playback Race Condition Fix
 
 **File:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
 
@@ -639,7 +694,7 @@ npm run deploy
 
 **Impact:** Eliminated visual flicker during video transitions
 
-### 3. Removed Unnecessary Timer Margin
+### 6. Removed Unnecessary Timer Margin
 
 **File:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
 
@@ -655,7 +710,7 @@ const duration = Math.ceil(actualDuration * 1000)  // Exact duration
 
 **Impact:** Removed 500ms waste per video (10% faster slideshow)
 
-### 4. Dynamic Video `src` Assignment
+### 7. Dynamic Video `src` Assignment
 
 **File:** `src/components/Slide.tsx`
 
@@ -671,7 +726,7 @@ src={isActive ? slide.href : undefined}  // Only when active
 
 **Impact:** Prevents browser from pre-loading inactive videos
 
-### 5. Console Logging Cleanup
+### 8. Console Logging Cleanup
 
 **Files:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
 
