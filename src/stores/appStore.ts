@@ -295,8 +295,41 @@ export const useAppStore = create<AppState>()(
             throw new Error(`HTTP error! status: ${response.status}`)
           }
 
-          const blob = await response.blob()
-          const file = new File([blob], fileName, { type: blob.type })
+          // Get total size for progress tracking
+          const contentLength = response.headers.get('content-length')
+          const totalSize = contentLength ? parseInt(contentLength) : 0
+
+          if (!response.body) {
+            throw new Error('Response body is null')
+          }
+
+          // Stream with progress logging
+          const reader = response.body.getReader()
+          const chunks: Uint8Array[] = []
+          let downloadedSize = 0
+          let lastLoggedPercent = 0
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            chunks.push(value)
+            downloadedSize += value.length
+
+            // Log progress every 10%
+            if (totalSize > 0) {
+              const percent = Math.floor((downloadedSize / totalSize) * 100)
+              if (percent >= lastLoggedPercent + 10) {
+                const downloadedMB = (downloadedSize / 1024 / 1024).toFixed(1)
+                const totalMB = (totalSize / 1024 / 1024).toFixed(1)
+                console.log(`📥 ${fileName}: ${percent}% (${downloadedMB}MB / ${totalMB}MB)`)
+                lastLoggedPercent = percent
+              }
+            }
+          }
+
+          const blob = new Blob(chunks)
+          const file = new File([blob], fileName, { type: response.headers.get('content-type') || 'application/octet-stream' })
 
           console.log(`💾 Saving: ${fileName} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`)
           await get().saveToOPFS(file, fileName)
