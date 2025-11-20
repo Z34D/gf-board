@@ -578,7 +578,7 @@ export const useAppStore = create<AppState>()(
           case 'daily4am':
             const tomorrow = new Date(now)
             tomorrow.setDate(tomorrow.getDate() + 1)
-            tomorrow.setHours(4, 0, 0, 0)
+            tomorrow.setHours(1, 0, 0, 0)
             return tomorrow
           default:
             return new Date(now.getTime() + 4 * 60 * 60 * 1000)

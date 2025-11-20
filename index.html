@@ -7,28 +7,33 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>GF-Kiosk</title>
 
-	<!-- Midnight Page Reload Script - Runs independently of React -->
+	<!-- 3 AM Page Reload Script - Runs independently of React -->
 	<script>
 		(function () {
 			function scheduleNextReload() {
 				const now = new Date();
-				const midnight = new Date();
-				midnight.setHours(24, 0, 0, 0); // Next midnight
+				const nextReload = new Date();
+				nextReload.setHours(3, 0, 0, 0); // 3 AM
 
-				const msUntilMidnight = midnight.getTime() - now.getTime();
+				// If 3 AM has already passed today, schedule for tomorrow
+				if (nextReload <= now) {
+					nextReload.setDate(nextReload.getDate() + 1);
+				}
 
-				console.log(`[Auto-Reload] Nächster Reload geplant für: ${midnight.toLocaleString('de-DE')}`);
+				const msUntilReload = nextReload.getTime() - now.getTime();
+
+				console.log(`[Auto-Reload] Nächster Reload geplant für: ${nextReload.toLocaleString('de-DE')}`);
 
 				setTimeout(function () {
-					console.log('[Auto-Reload] Führe Midnight-Reload durch...');
+					console.log('[Auto-Reload] Führe 3 AM-Reload durch...');
 					window.location.reload(true); // Force reload from server
-				}, msUntilMidnight);
+				}, msUntilReload);
 			}
 
 			// Start scheduling on page load
 			scheduleNextReload();
 
-			console.log('[Auto-Reload] Midnight reload scheduler initialized');
+			console.log('[Auto-Reload] 3 AM reload scheduler initialized');
 		})();
 	</script>
 </head>
