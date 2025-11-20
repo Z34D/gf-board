@@ -1,5 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const PIN_STORAGE_KEY = 'gf-kiosk-pin'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -7,8 +9,18 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Auto-login on mount if PIN is saved
+  useEffect(() => {
+    const savedPin = localStorage.getItem(PIN_STORAGE_KEY)
+    if (savedPin) {
+      console.log('🔑 Saved PIN found, attempting auto-login...')
+      setPin(savedPin)
+      // Auto-submit with saved PIN
+      attemptLogin(savedPin)
+    }
+  }, [])
+
+  const attemptLogin = async (pinToUse: string) => {
     setError('')
     setIsLoading(true)
 
@@ -18,21 +30,31 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin: pinToUse }),
         credentials: 'include',
       })
 
       if (response.ok) {
+        // Save PIN to localStorage on successful login
+        localStorage.setItem(PIN_STORAGE_KEY, pinToUse)
+        console.log('✅ Login successful, PIN saved')
         navigate({ to: '/', replace: true })
       } else {
         const data = await response.json()
         setError(data.error || 'Login fehlgeschlagen')
+        // Clear saved PIN if it's invalid
+        localStorage.removeItem(PIN_STORAGE_KEY)
       }
     } catch {
       setError('Netzwerkfehler')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await attemptLogin(pin)
   }
 
   return (
