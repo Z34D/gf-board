@@ -6,9 +6,11 @@
  * Setup-Schritte:
  * 1. WLAN konfigurieren (NetworkManager)
  * 2. Auto-Login aktivieren (raspi-config)
- * 3. Kiosk-Autostart (NUR labwc user autostart - EINE Methode!)
- * 4. Bildschirmschoner deaktivieren (raspi-config)
- * 5. Automatische Updates deaktivieren (wichtig für Kiosk-Stabilität!)
+ * 3. Tastatur auf Deutsch setzen
+ * 4. Auflösung auf 1080p fixieren
+ * 5. Kiosk-Autostart (NUR labwc user autostart - EINE Methode!)
+ * 6. Bildschirmschoner deaktivieren (raspi-config)
+ * 7. Automatische Updates deaktivieren (wichtig für Kiosk-Stabilität!)
  *
  * Autostart-Methode:
  * - NUR ~/.config/labwc/autostart (KEINE parallelen Methoden mehr!)
@@ -92,7 +94,42 @@ else
 	AUTOLOGIN_STATUS="FAIL"
 fi
 
-# 3. AUTOSTART EINRICHTEN (NUR EINE METHODE!)
+# 3. TASTATUR-LAYOUT AUF DEUTSCH SETZEN
+echo -n "Setze Tastatur-Layout auf Deutsch... "
+# Setze deutsches Tastatur-Layout (XKBLAYOUT=de)
+sudo raspi-config nonint do_configure_keyboard de >/dev/null 2>&1
+# Zusätzlich in /etc/default/keyboard sicherstellen
+if sudo test -f /etc/default/keyboard; then
+	sudo sed -i 's/^XKBLAYOUT=.*/XKBLAYOUT="de"/' /etc/default/keyboard
+	sudo sed -i 's/^XKBVARIANT=.*/XKBVARIANT=""/' /etc/default/keyboard
+	sudo sed -i 's/^XKBOPTIONS=.*/XKBOPTIONS=""/' /etc/default/keyboard
+fi
+echo -e "\${GREEN}[OK]\${NC}"
+KEYBOARD_STATUS="OK"
+
+# 4. AUFLÖSUNG AUF 1080p FIXIEREN
+echo -n "Fixiere Auflösung auf 1080p... "
+# Setze HDMI-Mode auf 1080p 60Hz (hdmi_mode=82 für 1920x1080 60Hz)
+CONFIG_FILE="/boot/firmware/config.txt"
+if sudo test -f "\$CONFIG_FILE"; then
+	# Entferne alte hdmi_group und hdmi_mode Einträge
+	sudo sed -i '/^hdmi_group=/d' "\$CONFIG_FILE"
+	sudo sed -i '/^hdmi_mode=/d' "\$CONFIG_FILE"
+	sudo sed -i '/^hdmi_drive=/d' "\$CONFIG_FILE"
+	# Füge neue Konfiguration hinzu
+	echo "" | sudo tee -a "\$CONFIG_FILE" >/dev/null
+	echo "# GF-Board 1080p Resolution" | sudo tee -a "\$CONFIG_FILE" >/dev/null
+	echo "hdmi_group=2" | sudo tee -a "\$CONFIG_FILE" >/dev/null
+	echo "hdmi_mode=82" | sudo tee -a "\$CONFIG_FILE" >/dev/null
+	echo "hdmi_drive=2" | sudo tee -a "\$CONFIG_FILE" >/dev/null
+	echo -e "\${GREEN}[OK]\${NC}"
+	RESOLUTION_STATUS="OK"
+else
+	echo -e "\${RED}[FEHLER - config.txt nicht gefunden]\${NC}"
+	RESOLUTION_STATUS="FAIL"
+fi
+
+# 5. AUTOSTART EINRICHTEN (NUR EINE METHODE!)
 echo -n "Erstelle Kiosk-Autostart... "
 
 # Finde den richtigen Chromium-Befehl (chromium ODER chromium-browser)
@@ -143,7 +180,7 @@ else
 	AUTOSTART_STATUS="FAIL"
 fi
 
-# 4. SCREEN BLANKING DEAKTIVIEREN
+# 6. SCREEN BLANKING DEAKTIVIEREN
 echo -n "Deaktiviere Bildschirmschoner... "
 if sudo raspi-config nonint do_blanking 1 >/dev/null 2>&1; then
 	echo -e "\${GREEN}[OK]\${NC}"
@@ -153,7 +190,7 @@ else
 	BLANKING_STATUS="WARN"
 fi
 
-# 5. AUTOMATISCHE UPDATES DEAKTIVIEREN (wichtig für Kiosk!)
+# 7. AUTOMATISCHE UPDATES DEAKTIVIEREN (wichtig für Kiosk!)
 echo -n "Deaktiviere automatische Updates... "
 # Stoppe und deaktiviere apt-daily Timer
 sudo systemctl stop apt-daily.timer >/dev/null 2>&1
@@ -183,6 +220,18 @@ if [ "$AUTOLOGIN_STATUS" == "OK" ]; then
 	echo -e "Auto-Login:          \${GREEN}✓ AKTIVIERT\${NC}"
 else
 	echo -e "Auto-Login:          \${RED}✗ FEHLGESCHLAGEN\${NC}"
+fi
+
+if [ "$KEYBOARD_STATUS" == "OK" ]; then
+	echo -e "Tastatur-Layout:     \${GREEN}✓ DEUTSCH\${NC}"
+else
+	echo -e "Tastatur-Layout:     \${YELLOW}⚠ WARNUNG\${NC}"
+fi
+
+if [ "$RESOLUTION_STATUS" == "OK" ]; then
+	echo -e "Auflösung:           \${GREEN}✓ 1080p FIXIERT\${NC}"
+else
+	echo -e "Auflösung:           \${RED}✗ FEHLGESCHLAGEN\${NC}"
 fi
 
 if [ "$AUTOSTART_STATUS" == "OK" ]; then
