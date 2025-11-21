@@ -34,3 +34,9 @@ input, textarea {
   user-select: text;
 }
 
+/* Hide cursor completely in kiosk mode */
+.hide-cursor,
+.hide-cursor * {
+  cursor: none !important;
+}
+

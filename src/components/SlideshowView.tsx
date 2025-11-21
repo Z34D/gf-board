@@ -1,13 +1,11 @@
 import React, { useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
-import { useCursorManagement } from './slideshow/hooks/useCursorManagement'
 import { useSlideshowMachine } from './slideshow/hooks/useSlideshowMachine'
 import { useMediaBlobUrls } from './slideshow/hooks/useMediaBlobUrls'
 import { Slide } from './Slide'
 
 const SlideshowView: React.FC = () => {
   const { clearSelectedLocation, mediaFiles, syncStatus } = useAppStore()
-  const { hideCursor, showCursor } = useCursorManagement()
 
   // Load OPFS files as blob URLs
   const mediaUrls = useMediaBlobUrls(mediaFiles)
@@ -36,13 +34,6 @@ const SlideshowView: React.FC = () => {
   const { currentIndex, direction, isTransitioning, videoRef, goToNext, goToPrev } =
     useSlideshowMachine(slides)
 
-  // Hide cursor when slideshow starts
-  useEffect(() => {
-    if (!syncStatus.isSyncing && slides.length > 0) {
-      hideCursor()
-    }
-  }, [syncStatus.isSyncing, slides.length, hideCursor])
-
   // Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,12 +61,11 @@ const SlideshowView: React.FC = () => {
         default:
           break
       }
-      showCursor()
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [slides.length, goToNext, goToPrev, showCursor, syncStatus.isSyncing, clearSelectedLocation])
+  }, [slides.length, goToNext, goToPrev, syncStatus.isSyncing, clearSelectedLocation])
 
   // Touch Navigation
   const touchStartX = React.useRef(0)
@@ -92,7 +82,6 @@ const SlideshowView: React.FC = () => {
         goToPrev()
       }
     }
-    showCursor()
   }
 
   return (
@@ -105,7 +94,7 @@ const SlideshowView: React.FC = () => {
           </div>
         </div>
       ) : slides.length > 0 ? (
-        <div className="relative w-full h-full">
+        <div className="hide-cursor relative w-full h-full">
           {/* Render all slides - only visible ones show */}
           {slides.map((slide, index) => (
             <Slide
