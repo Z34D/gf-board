@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "GF Kiosk Monitor",
+  "version": "1.0.0",
+  "description": "Monitors GF Kiosk for crashes and errors, auto-reloads when needed",
+  "permissions": [
+    "tabs",
+    "webNavigation",
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

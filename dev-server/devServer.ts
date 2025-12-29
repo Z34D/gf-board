@@ -1,25 +1,38 @@
-import app from '../worker/index';
+import app from "../worker/index";
 
-const BACKEND_PORT = Number(process.env.BACKEND_PORT || 3001); // Use different port
+const BACKEND_PORT = Number(process.env.BACKEND_PORT || 3001);
 const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 5000);
+const RANDOM_ERROR_RATE = Number(process.env.RANDOM_ERROR_RATE || 0); // 0-100, percentage chance of error
 
 async function main() {
-  const jwtSecret = process.env.JWT_SECRET || 'REDACTED_JWT_SECRET';
-  const pin = process.env.KIOSK_PIN || '1234';
-  const apiKey = process.env.GOOGLE_DRIVE_API_KEY || 'REDACTED_GOOGLE_API_KEY';
-  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 'REDACTED_FOLDER_ID';
+  const jwtSecret =
+    process.env.JWT_SECRET ||
+    "REDACTED_JWT_SECRET";
+  const pin = process.env.KIOSK_PIN || "1234";
+  const apiKey =
+    process.env.GOOGLE_DRIVE_API_KEY ||
+    "REDACTED_GOOGLE_API_KEY";
+  const rootFolderId =
+    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ||
+    "REDACTED_FOLDER_ID";
 
   console.log(`🔐 Using JWT_SECRET: ${jwtSecret.substring(0, 10)}...`);
   console.log(`🔑 Using PIN: ${pin}`);
   console.log(`📁 Using Root Folder ID: ${rootFolderId}`);
+  if (RANDOM_ERROR_RATE > 0) {
+    console.log(`🎲 Random errors enabled: ${RANDOM_ERROR_RATE}% chance`);
+  }
   if (!apiKey) {
-    console.warn('⚠️  GOOGLE_DRIVE_API_KEY not set in environment');
+    console.warn("⚠️  GOOGLE_DRIVE_API_KEY not set in environment");
   }
 
   // Einfacher Fetcher, der statische Anfragen zur Vite-Dev-Server weiterleitet
   const ASSETS = {
     async fetch(input: RequestInfo, init?: RequestInit) {
-      const req = typeof input === 'string' ? new Request(input, init) : input as Request;
+      const req =
+        typeof input === "string"
+          ? new Request(input, init)
+          : (input as Request);
       const url = new URL(req.url);
       const target = `http://localhost:${FRONTEND_PORT}${url.pathname}${url.search}`;
       return fetch(target, {
@@ -38,27 +51,59 @@ async function main() {
     JWT_SECRET: string;
   } = {
     ASSETS,
-    GOOGLE_DRIVE_API_KEY: apiKey || '',
+    GOOGLE_DRIVE_API_KEY: apiKey || "",
     GOOGLE_DRIVE_ROOT_FOLDER_ID: rootFolderId,
     KIOSK_PIN: pin,
-    JWT_SECRET: jwtSecret
+    JWT_SECRET: jwtSecret,
   };
 
   const server = Bun.serve({
     port: BACKEND_PORT,
-    fetch: (req: Request) => app.fetch(req, env),
+    fetch: (req: Request) => {
+      // Random error simulation for testing
+      if (RANDOM_ERROR_RATE > 0 && Math.random() * 100 < RANDOM_ERROR_RATE) {
+        const url = new URL(req.url);
+        // Only affect API routes, not static assets
+        if (url.pathname.startsWith("/api/")) {
+          const errorType = Math.random();
+          if (errorType < 0.33) {
+            console.log(`🎲 Simulated 500 error: ${url.pathname}`);
+            return new Response("Simulated server error", { status: 500 });
+          } else if (errorType < 0.66) {
+            console.log(`🎲 Simulated 503 error: ${url.pathname}`);
+            return new Response("Simulated service unavailable", {
+              status: 503,
+            });
+          } else {
+            console.log(`🎲 Simulated timeout: ${url.pathname}`);
+            // Simulate a very slow response (will likely trigger client timeout)
+            return new Promise((resolve) => {
+              setTimeout(
+                () => {
+                  resolve(
+                    new Response("Simulated slow response", { status: 200 }),
+                  );
+                },
+                15 * 60 * 1000,
+              ); // 15 minutes
+            });
+          }
+        }
+      }
+      return app.fetch(req, env);
+    },
   });
 
   console.log(`Hono Dev-Backend läuft auf http://localhost:${server.port}`);
-  
+
   // Graceful shutdown handler
-  process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down gracefully...');
+  process.on("SIGINT", () => {
+    console.log("\n🛑 Shutting down gracefully...");
     process.exit(0);
   });
-  
-  process.on('SIGTERM', () => {
-    console.log('\n🛑 Shutting down gracefully...');
+
+  process.on("SIGTERM", () => {
+    console.log("\n🛑 Shutting down gracefully...");
     process.exit(0);
   });
 }

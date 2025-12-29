@@ -1,46 +1,44 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/gf-favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GF-Kiosk</title>
 
-<head>
-	<meta charset="UTF-8" />
-	<link rel="icon" type="image/svg+xml" href="/gf-favicon.svg" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>GF-Kiosk</title>
+    <!-- 3 AM Page Reload Script - Runs independently of React -->
+    <script>
+      (function () {
+        function scheduleNextReload() {
+          const now = new Date();
+          const nextReload = new Date();
+          nextReload.setHours(3, 0, 0, 0); // 3 AM
 
-	<!-- 3 AM Page Reload Script - Runs independently of React -->
-	<script>
-		(function () {
-			function scheduleNextReload() {
-				const now = new Date();
-				const nextReload = new Date();
-				nextReload.setHours(3, 0, 0, 0); // 3 AM
+          // If 3 AM has already passed today, schedule for tomorrow
+          if (nextReload <= now) {
+            nextReload.setDate(nextReload.getDate() + 1);
+          }
 
-				// If 3 AM has already passed today, schedule for tomorrow
-				if (nextReload <= now) {
-					nextReload.setDate(nextReload.getDate() + 1);
-				}
+          const msUntilReload = nextReload.getTime() - now.getTime();
 
-				const msUntilReload = nextReload.getTime() - now.getTime();
+          console.log(
+            `[Auto-Reload] Nächster Reload geplant für: ${nextReload.toLocaleString("de-DE")}`,
+          );
 
-				console.log(`[Auto-Reload] Nächster Reload geplant für: ${nextReload.toLocaleString('de-DE')}`);
+          setTimeout(function () {
+            console.log("[Auto-Reload] Führe 3 AM-Reload durch...");
+            window.location.reload(true); // Force reload from server
+          }, msUntilReload);
+        }
 
-				setTimeout(function () {
-					console.log('[Auto-Reload] Führe 3 AM-Reload durch...');
-					window.location.reload(true); // Force reload from server
-				}, msUntilReload);
-			}
+        // Start scheduling on page load
+        scheduleNextReload();
+      })();
+    </script>
+  </head>
 
-			// Start scheduling on page load
-			scheduleNextReload();
-
-			console.log('[Auto-Reload] 3 AM reload scheduler initialized');
-		})();
-	</script>
-</head>
-
-<body>
-	<div id="root"></div>
-	<script type="module" src="/src/main.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

@@ -1,82 +1,88 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
-import { file } from 'opfs-tools'
+/**
+ * Hook to convert OPFS file paths to blob URLs for media playback
+ *
+ * Features:
+ * - Loads files from OPFS and creates blob URLs
+ * - Memoized to prevent unnecessary URL recreation
+ * - Tracks loaded files to avoid duplicate conversions
+ * - Revokes blob URLs on unmount to prevent memory leaks
+ *
+ * @module hooks/useMediaBlobUrls
+ */
+
+import { useEffect, useRef, useState, useMemo } from "react";
+import { loadFile, MEDIA_DIR } from "../../../utils/opfs";
+import type { MediaFile } from "../../../stores/appStore";
 
 /**
- * Hook zum Konvertieren von OPFS Paths zu blob URLs
- * Memoized um zu verhindern dass URLs mehrfach recreated werden
+ * Converts OPFS media files to blob URLs for browser playback
+ *
+ * @param mediaFiles - Array of media file metadata from store
+ * @returns Map of localPath → blobUrl for each loaded file
+ *
+ * @example
+ * const urls = useMediaBlobUrls(mediaFiles)
+ * // urls = { "video1.mp4": "blob:http://...", "image1.jpg": "blob:http://..." }
  */
-export const useMediaBlobUrls = (mediaFiles: any[]) => {
-  const [mediaUrls, setMediaUrls] = useState<{ [key: string]: string }>({})
-  const objectUrlsRef = useRef<Set<string>>(new Set())
-  const loadedRef = useRef<Set<string>>(new Set())
+export const useMediaBlobUrls = (mediaFiles: MediaFile[]) => {
+  const [mediaUrls, setMediaUrls] = useState<{ [key: string]: string }>({});
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+  const loadedRef = useRef<Set<string>>(new Set());
 
-  // Memoize mediaFiles um zu verhinderten dass Hook mehrfach triggert
-  const memoizedFiles = useMemo(() => mediaFiles, [mediaFiles.length])
+  // Memoize mediaFiles to prevent hook from triggering multiple times
+  const memoizedFiles = useMemo(() => mediaFiles, [mediaFiles.length]);
 
   useEffect(() => {
     const convertToBlobs = async () => {
-      const urls: { [key: string]: string } = {}
-      const newLoaded = new Set<string>()
+      const urls: { [key: string]: string } = {};
+      const newLoaded = new Set<string>();
 
       for (const mediaFile of memoizedFiles) {
-        if (!mediaFile.localPath) continue
+        const localPath = mediaFile.name;
 
-        // Skip wenn bereits geladen
-        if (loadedRef.current.has(mediaFile.localPath)) {
-          continue
+        // Skip if already loaded
+        if (loadedRef.current.has(localPath)) {
+          continue;
         }
 
         try {
-          // Get file from OPFS
-          const fileHandle = file(mediaFile.localPath)
-          const exists = await fileHandle.exists()
+          // Get file from OPFS media directory
+          const originalFile = await loadFile(`${MEDIA_DIR}/${localPath}`);
 
-          if (!exists) {
-            console.warn(`⚠️ File not found in OPFS: ${mediaFile.localPath}`)
-            continue
-          }
-
-          // Get original file and create blob URL
-          const originalFile = await fileHandle.getOriginFile()
           if (!originalFile) {
-            console.warn(`⚠️ Could not load file from OPFS: ${mediaFile.localPath}`)
-            continue
+            console.warn(`⚠️ File not found in OPFS: ${localPath}`);
+            continue;
           }
 
-          const blobUrl = URL.createObjectURL(originalFile)
-          urls[mediaFile.localPath] = blobUrl
-          objectUrlsRef.current.add(blobUrl)
-          newLoaded.add(mediaFile.localPath)
+          const blobUrl = URL.createObjectURL(originalFile);
+          urls[localPath] = blobUrl;
+          objectUrlsRef.current.add(blobUrl);
+          newLoaded.add(localPath);
         } catch (error) {
-          console.error(`❌ Error converting ${mediaFile.localPath}:`, error)
+          console.error(`❌ Error converting ${localPath}:`, error);
         }
       }
 
-      // Nur update wenn neue URLs erstellt wurden
+      // Only update if new URLs were created
       if (newLoaded.size > 0) {
-        loadedRef.current = new Set([...loadedRef.current, ...newLoaded])
-        setMediaUrls((prev) => ({ ...prev, ...urls }))
+        loadedRef.current = new Set([...loadedRef.current, ...newLoaded]);
+        setMediaUrls((prev) => ({ ...prev, ...urls }));
       }
-    }
+    };
 
-    convertToBlobs()
+    convertToBlobs();
+  }, [memoizedFiles]);
 
-    // Cleanup - aber preserve URLs bis component unmount
-    return () => {
-      // Nicht hier löschen - nur bei unmount
-    }
-  }, [memoizedFiles])
-
-  // Nur beim unmount clearen
+  // Cleanup only on unmount
   useEffect(() => {
     return () => {
       objectUrlsRef.current.forEach((url) => {
-        URL.revokeObjectURL(url)
-      })
-      objectUrlsRef.current.clear()
-      loadedRef.current.clear()
-    }
-  }, [])
+        URL.revokeObjectURL(url);
+      });
+      objectUrlsRef.current.clear();
+      loadedRef.current.clear();
+    };
+  }, []);
 
-  return mediaUrls
-}
+  return mediaUrls;
+};

@@ -1,202 +1,259 @@
-import { useState, useCallback, useRef, useEffect, useReducer } from 'react'
+/**
+ * Slideshow state machine hook
+ *
+ * Manages slideshow playback state and navigation.
+ *
+ * State transitions:
+ *   IDLE → LOADING → READY → PLAYING ↔ TRANSITIONING
+ *
+ * Features:
+ * - Auto-advances images (10s) and videos (actual duration)
+ * - Handles video readyState to prevent showing last frame
+ * - Smooth transitions with 400ms CSS animation
+ *
+ * @module hooks/useSlideshowMachine
+ */
 
-type SlideShowState = 'IDLE' | 'LOADING' | 'READY' | 'PLAYING' | 'TRANSITIONING'
+import { useState, useCallback, useRef, useEffect, useReducer } from "react";
 
+/** Possible slideshow states */
+type SlideShowState =
+  | "IDLE"
+  | "LOADING"
+  | "READY"
+  | "PLAYING"
+  | "TRANSITIONING";
+
+/** Actions that trigger state transitions */
 interface SlideShowAction {
-  type: 'START_LOADING' | 'MEDIA_READY' | 'PLAY' | 'TRANSITION_START' | 'TRANSITION_END' | 'PAUSE'
-  payload?: any
+  type:
+    | "START_LOADING"
+    | "MEDIA_READY"
+    | "PLAY"
+    | "TRANSITION_START"
+    | "TRANSITION_END"
+    | "PAUSE";
+  payload?: unknown;
 }
 
-const reducer = (state: SlideShowState, action: SlideShowAction): SlideShowState => {
+/** State machine reducer */
+const reducer = (
+  state: SlideShowState,
+  action: SlideShowAction,
+): SlideShowState => {
   switch (action.type) {
-    case 'START_LOADING':
-      return 'LOADING'
-    case 'MEDIA_READY':
-      return 'READY'
-    case 'PLAY':
-      return 'PLAYING'
-    case 'TRANSITION_START':
-      return 'TRANSITIONING'
-    case 'TRANSITION_END':
-      return 'PLAYING'
-    case 'PAUSE':
-      return 'READY'
+    case "START_LOADING":
+      return "LOADING";
+    case "MEDIA_READY":
+      return "READY";
+    case "PLAY":
+      return "PLAYING";
+    case "TRANSITION_START":
+      return "TRANSITIONING";
+    case "TRANSITION_END":
+      return "PLAYING";
+    case "PAUSE":
+      return "READY";
     default:
-      return state
+      return state;
   }
+};
+
+/** Slide data structure */
+interface Slide {
+  href: string;
+  type: "image" | "video";
+  videoDuration?: number;
 }
 
-export const useSlideshowMachine = (slides: any[]) => {
-  const [state, dispatch] = useReducer(reducer, 'IDLE')
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [direction, setDirection] = useState<'next' | 'prev'>('next')
+/**
+ * Slideshow state machine hook
+ *
+ * @param slides - Array of slides with blob URLs
+ * @returns State machine controls and current state
+ */
+export const useSlideshowMachine = (slides: Slide[]) => {
+  const [state, dispatch] = useReducer(reducer, "IDLE");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [direction, setDirection] = useState<"next" | "prev">("next");
 
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const autoPlayTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const goToNextRef = useRef<() => void>(() => {})
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const autoPlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const goToNextRef = useRef<() => void>(() => {});
 
   // State transition tracking
   useEffect(() => {
     // console.log(`🔄 [STATE] ${state}`)
-  }, [state])
+  }, [state]);
 
   // 📥 Start loading when slides are available
   useEffect(() => {
-    if (slides.length > 0 && state === 'IDLE') {
-      dispatch({ type: 'START_LOADING' })
+    if (slides.length > 0 && state === "IDLE") {
+      dispatch({ type: "START_LOADING" });
     }
-  }, [slides.length, state])
+  }, [slides.length, state]);
 
   // ✅ Slides are ready to play (only when blob URLs are available)
   useEffect(() => {
-    if (state === 'LOADING') {
-      const allHaveBlobs = slides.length > 0 && slides.every(s => s.href.startsWith('blob:'))
+    if (state === "LOADING") {
+      const allHaveBlobs =
+        slides.length > 0 && slides.every((s) => s.href.startsWith("blob:"));
       if (allHaveBlobs) {
         // console.log(`✅ All blob URLs ready, transitioning to READY state`)
-        dispatch({ type: 'MEDIA_READY' })
+        dispatch({ type: "MEDIA_READY" });
       }
     }
-  }, [state, slides])
+  }, [state, slides]);
 
   // ▶️ Play when ready
   useEffect(() => {
-    if (state === 'READY' && slides.length > 0) {
-      dispatch({ type: 'PLAY' })
+    if (state === "READY" && slides.length > 0) {
+      dispatch({ type: "PLAY" });
     }
-  }, [state, slides.length])
+  }, [state, slides.length]);
 
   // 🎬 Setup video/image when playing
   useEffect(() => {
-    if (state !== 'PLAYING' || slides.length === 0) return
+    if (state !== "PLAYING" || slides.length === 0) return;
 
-    const currentSlide = slides[currentIndex]
-    if (!currentSlide) return
+    const currentSlide = slides[currentIndex];
+    if (!currentSlide) return;
 
     // console.log(`\n📺 [PLAYING] Slide ${currentIndex} (${currentSlide.type})`)
 
     // Clear old timer
     if (autoPlayTimerRef.current) {
-      clearTimeout(autoPlayTimerRef.current)
-      autoPlayTimerRef.current = null
+      clearTimeout(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
     }
 
-    if (currentSlide.type === 'video' && videoRef.current) {
-      const video = videoRef.current
+    if (currentSlide.type === "video" && videoRef.current) {
+      const video = videoRef.current;
 
       // Setup video
-      video.currentTime = 0
-      video.muted = true
-      video.volume = 0
+      video.currentTime = 0;
+      video.muted = true;
+      video.volume = 0;
 
       // Function to play video when ready
       const playVideo = () => {
-        video.play().then(() => {
-          // console.log(`   ▶️ Playing`)
-        }).catch(() => {
-          // console.warn(`   ⚠️ Play failed:`, err.message)
-        })
+        video
+          .play()
+          .then(() => {
+            // console.log(`   ▶️ Playing`)
+          })
+          .catch(() => {
+            // console.warn(`   ⚠️ Play failed:`, err.message)
+          });
 
         // Set timer based on actual duration
-        const actualDuration = video.duration || currentSlide.videoDuration || 10
+        const actualDuration =
+          video.duration || currentSlide.videoDuration || 10;
         // console.log(`   🎥 Video: ${actualDuration}s`)
-        const duration = Math.ceil(actualDuration * 1000)
+        const duration = Math.ceil(actualDuration * 1000);
         // console.log(`   ⏱️ Auto-advance in: ${duration}ms`)
 
         autoPlayTimerRef.current = setTimeout(() => {
-          goToNextRef.current()
-        }, duration)
-      }
+          goToNextRef.current();
+        }, duration);
+      };
 
       // Wait for video to be ready (readyState >= 2 means current frame is available)
       if (video.readyState >= 2) {
         // Video is already ready to play
         // console.log(`   ✅ Video ready (readyState: ${video.readyState})`)
-        playVideo()
+        playVideo();
       } else {
         // Wait for canplay event - more reliable than readyState checking
         // console.log(`   ⏳ Waiting for video to be ready...`)
         const handleCanPlay = () => {
           // console.log(`   ✅ Video ready (canplay event)`)
-          playVideo()
-          video.removeEventListener('canplay', handleCanPlay)
-        }
-        video.addEventListener('canplay', handleCanPlay)
+          playVideo();
+          video.removeEventListener("canplay", handleCanPlay);
+        };
+        video.addEventListener("canplay", handleCanPlay);
       }
-    } else if (currentSlide.type === 'image') {
+    } else if (currentSlide.type === "image") {
       // console.log(`   🖼️ Image`)
 
       // Image auto-advance
-      const IMAGE_DURATION = 10000
+      const IMAGE_DURATION = 10000;
       // console.log(`   ⏱️ Timer: ${IMAGE_DURATION}ms`)
 
       autoPlayTimerRef.current = setTimeout(() => {
-        goToNextRef.current()
-      }, IMAGE_DURATION)
+        goToNextRef.current();
+      }, IMAGE_DURATION);
     }
-  }, [state, currentIndex, slides])
+  }, [state, currentIndex, slides]);
 
   // Navigate to next slide
   const goToNext = useCallback(() => {
-    const nextIndex = (currentIndex + 1) % slides.length
-    goToSlide(nextIndex, 'next')
-  }, [currentIndex, slides.length])
+    const nextIndex = (currentIndex + 1) % slides.length;
+    goToSlide(nextIndex, "next");
+  }, [currentIndex, slides.length]);
 
   // Keep ref updated with latest goToNext function
   useEffect(() => {
-    goToNextRef.current = goToNext
-  }, [goToNext])
+    goToNextRef.current = goToNext;
+  }, [goToNext]);
 
   // Navigate to previous slide
   const goToPrev = useCallback(() => {
-    const prevIndex = currentIndex === 0 ? slides.length - 1 : currentIndex - 1
-    goToSlide(prevIndex, 'prev')
-  }, [currentIndex, slides.length])
+    const prevIndex = currentIndex === 0 ? slides.length - 1 : currentIndex - 1;
+    goToSlide(prevIndex, "prev");
+  }, [currentIndex, slides.length]);
 
   // Generic slide navigation
   const goToSlide = useCallback(
-    (index: number, dir: 'next' | 'prev') => {
-      if (index === currentIndex || index < 0 || index >= slides.length || state === 'TRANSITIONING') {
-        return
+    (index: number, dir: "next" | "prev") => {
+      if (
+        index === currentIndex ||
+        index < 0 ||
+        index >= slides.length ||
+        state === "TRANSITIONING"
+      ) {
+        return;
       }
 
       // console.log(`\n➡️ Navigate: ${currentIndex} → ${index} (${dir})`)
 
       // Pause current video
       if (videoRef.current && videoRef.current.paused === false) {
-        videoRef.current.pause()
-        videoRef.current.currentTime = 0
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
       }
 
       // Start transition
-      setDirection(dir)
-      dispatch({ type: 'TRANSITION_START' })
+      setDirection(dir);
+      dispatch({ type: "TRANSITION_START" });
 
       // After transition animation, update index and resume playing
       transitionTimeoutRef.current = setTimeout(() => {
-        setCurrentIndex(index)
-        dispatch({ type: 'PLAY' })
-      }, 400) // Match CSS transition duration
+        setCurrentIndex(index);
+        dispatch({ type: "PLAY" });
+      }, 400); // Match CSS transition duration
     },
-    [currentIndex, slides.length, state]
-  )
+    [currentIndex, slides.length, state],
+  );
 
   // Cleanup
   useEffect(() => {
     return () => {
-      if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current)
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current)
-    }
-  }, [])
+      if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current);
+      if (transitionTimeoutRef.current)
+        clearTimeout(transitionTimeoutRef.current);
+    };
+  }, []);
 
   return {
     state,
     currentIndex,
     direction,
-    isTransitioning: state === 'TRANSITIONING',
+    isTransitioning: state === "TRANSITIONING",
     videoRef,
     goToNext,
     goToPrev,
-    goToSlide
-  }
-}
+    goToSlide,
+  };
+};

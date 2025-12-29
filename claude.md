@@ -1,991 +1,333 @@
 # GF-Board - Project Documentation
 
-> A gymnasium/fitness facility digital signage kiosk application for displaying promotional content from Google Drive with offline-first operation and intelligent synchronization.
+> Digital signage kiosk for gym displays. Shows promotional content from Google Drive with offline-first operation.
 
-**Project Root:** `C:\Users\cgzie\Documents\repo\gf-board\`
-**Repository:** Git-based (main branch)
-**Status:** Production-ready
-**Last Updated:** November 20, 2025
+## Quick Reference
 
----
+| Item | Value |
+|------|-------|
+| **Project Root** | `C:\Users\cgzie\Documents\repo\gf-board\` |
+| **Stack** | React 19 + TypeScript + Cloudflare Workers + Vite |
+| **State** | Zustand |
+| **Storage** | OPFS (offline), Google Drive (source) |
+| **Styling** | Tailwind CSS v4 |
+| **Target** | Raspberry Pi 4 + Chromium (24/7 kiosk) |
 
-## Table of Contents
+## Commands
 
-1. [Project Overview](#project-overview)
-2. [Architecture](#architecture)
-3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Core Components](#core-components)
-6. [Data Flow](#data-flow)
-7. [Development Guide](#development-guide)
-8. [Deployment Guide](#deployment-guide)
-9. [Raspberry Pi Specific](#raspberry-pi-specific)
-10. [Recent Fixes & Improvements](#recent-fixes--improvements)
-11. [Known Issues & Debugging](#known-issues--debugging)
-
----
-
-## Project Overview
-
-### What is GF-Board?
-
-GF-Board is a digital signage system designed for fitness facilities (gyms). It displays a slideshow of promotional images and videos on kiosk displays throughout gym locations. The application is optimized for 24/7 operation on Raspberry Pi hardware with automatic content synchronization from Google Drive.
-
-### Key Features
-
-- **Multi-Location Support:** 5 German gym locations with separate content
-  - Flieden, Neuhof, Gersfeld, Schlitz, Eichenzell
-- **Offline-First:** Uses OPFS (Origin Private File System) to cache files locally
-- **Smart Sync:** Intelligent synchronization with Google Drive
-  - Configurable intervals: 5 min, 4 hours, 8 hours, or daily at 1am
-  - Only downloads/updates changed files
-  - Streams large files to prevent RAM overflow on RPi
-- **Secure Access:** PIN-based authentication with JWT tokens
-- **Kiosk Mode:** Auto-hiding cursor, full-screen presentation
-- **Responsive:** Works on various display sizes and resolutions
-- **Auto-Refresh:** Automatic page reload at 3am for data freshness
+```bash
+npm run dev        # Start dev server
+npm run dev:error  # Dev with 30% random API errors (testing)
+npm run build      # Build for production
+npm run deploy     # Deploy to Cloudflare Workers
+```
 
 ---
 
 ## Architecture
 
-### High-Level Architecture
+### High-Level
 
 ```
-┌──────────────────────┐
-│  Chromium Browser    │
-│  (Raspberry Pi 4)    │
-│  ├─ React 19 SPA     │
-│  ├─ TanStack Router  │
-│  ├─ Zustand state    │
-│  └─ OPFS storage     │
-└──────────┬───────────┘
-           │ HTTPS
-           ↓
-┌──────────────────────────────────┐
-│  Cloudflare Workers (Edge)       │
-│  ├─ Hono API server              │
-│  ├─ Auth middleware              │
-│  ├─ Google Drive proxy           │
-│  ├─ Streaming responses          │
-│  └─ KV storage                   │
-└──────────┬──────────────────────┘
-           │
-    ┌──────┴──────┐
-    ↓             ↓
-┌─────────┐  ┌──────────────────┐
-│ KV Store│  │ Google Drive API │
-│ (Secrets)  │ (Media files)     │
-└─────────┘  └──────────────────┘
+Raspberry Pi (Chromium)
+    ↓ HTTPS
+Cloudflare Workers (Hono API)
+    ↓
+Google Drive (Media files per location)
 ```
 
-### Architecture Pattern
-
-**Jamstack + Serverless Edge Computing**
-- Frontend: Static React SPA
-- Backend: Cloudflare Workers (edge functions)
-- Storage: Google Drive (content) + Cloudflare KV (config)
-- Cache: Browser OPFS (offline)
-
----
-
-## Tech Stack
-
-### Frontend
-
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| React | 19.2.0 | UI framework |
-| TypeScript | 5.8.3 | Type safety |
-| Vite | 7.2.2 | Build tool & dev server |
-| TanStack Router | 1.134.15 | Client-side routing |
-| Tailwind CSS | v4 | Styling |
-| Zustand | 5.0.8 | State management |
-| opfs-tools | 0.7.4 | OPFS file access |
-
-### Backend
-
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Hono | 4.10.4 | Web framework (Cloudflare Workers) |
-| Cloudflare Workers | - | Edge computing |
-| Cloudflare KV | - | Key-value storage |
-| Google Drive API | v3 | Content source |
-
-### Development
-
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Bun | latest | Runtime & package manager |
-| Wrangler | 4.46.0 | Cloudflare CLI |
-| ESLint | 9.39.1 | Code linting |
-| @vitejs/plugin-react-swc | 4.2.1 | Fast transpilation |
-
----
-
-## Project Structure
+### Key Directories
 
 ```
 gf-board/
 ├── src/
-│   ├── components/
-│   │   ├── LoginPage.tsx              # PIN authentication
-│   │   ├── LocationSelectionView.tsx  # Location picker + scheduler
-│   │   ├── SlideshowView.tsx          # Main slideshow component
-│   │   ├── Slide.tsx                  # Individual slide renderer
+│   ├── components/          # React components
+│   │   ├── LoginPage.tsx
+│   │   ├── LocationSelectionView.tsx
+│   │   ├── SlideshowView.tsx
+│   │   ├── Slide.tsx
 │   │   └── slideshow/hooks/
-│   │       ├── useSlideshowMachine.ts    # State machine (IMPORTANT)
-│   │       ├── useMediaBlobUrls.ts       # OPFS to blob conversion
-│   │       └── useCursorManagement.ts    # Cursor auto-hide
+│   │       ├── useSlideshowMachine.ts
+│   │       └── useMediaBlobUrls.ts
 │   ├── stores/
-│   │   └── appStore.ts                # Zustand store (CORE LOGIC)
-│   ├── routes/
-│   │   ├── __root.tsx                 # Root layout
-│   │   ├── index.tsx                  # Main board
-│   │   └── login.tsx                  # Login page
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── vite-env.d.ts
+│   │   └── appStore.ts      # Zustand store
+│   ├── utils/               # Utility modules
+│   │   ├── opfs.ts          # OPFS file operations
+│   │   ├── download.ts      # Download with timeout/retry
+│   │   ├── sync.ts          # Background sync logic
+│   │   └── errors.ts        # Error handling
+│   └── routes/              # TanStack Router
 ├── worker/
-│   └── index.ts                       # Hono API server (BACKEND)
-├── dev-server/
-│   ├── dev.ts                         # Process manager
-│   ├── devServer.ts                   # Hono dev server
-│   └── localKV.ts                     # Local KV emulation
-├── public/
-│   └── gf-favicon.svg
-├── dist/                              # Build output
-├── index.html                         # Entry point (includes 3am reload)
-├── vite.config.ts
-├── wrangler.toml                      # Cloudflare config
-├── tsconfig.base.json
-├── tsconfig.app.json
-├── tsconfig.worker.json
-├── tsconfig.node.json
-├── package.json
-├── package-lock.json
-└── claude.md                          # This file
-```
-
-### Key Files
-
-**CORE LOGIC (Critical for understanding):**
-- `src/stores/appStore.ts` - All state management + sync logic (607 lines)
-- `worker/index.ts` - Backend API + Google Drive proxy (237 lines)
-- `src/components/slideshow/hooks/useSlideshowMachine.ts` - Slideshow state machine (202 lines)
-
-**UI COMPONENTS:**
-- `src/components/SlideshowView.tsx` - Main slideshow (123 lines)
-- `src/components/LocationSelectionView.tsx` - Location picker (140 lines)
-- `src/components/Slide.tsx` - Slide renderer (109 lines)
-
-**DEVELOPMENT:**
-- `dev-server/devServer.ts` - Dev environment setup (69 lines)
-- `dev-server/localKV.ts` - Local KV storage emulation (78 lines)
-
----
-
-## Core Components
-
-### 1. State Management (appStore.ts)
-
-**Zustand store managing:**
-
-**Location & Media:**
-- `selectedLocation` - Current gym location
-- `mediaFiles` - Array of synced media objects
-- `availableLocations` - 5 gym locations
-
-**Sync Operations:**
-- `syncStatus.isSyncing` - Sync in progress flag
-- `syncStatus.lastSync` - Last sync timestamp
-- `syncStatus.error` - Error messages
-- `syncLocationMedia()` - Main sync orchestrator
-
-**Core Sync Flow:**
-```
-syncLocationMedia() →
-  1. listDriveFolder() - Get folder structure
-  2. Collect files from "Shared" + location folders
-  3. getLocalFiles() - Get OPFS files
-  4. compareFiles() - Determine actions
-  5. executeSyncActions() - Download/update/delete
-```
-
-**File Operations:**
-- `listDriveFolder(folderId)` - Query Google Drive
-- `downloadFileFromDrive(fileId)` - Download file
-- `saveToOPFS(path, file)` - Save to OPFS
-- `loadFromOPFS(path)` - Load from OPFS
-- `getLocalFiles()` - Scan OPFS
-
-**Scheduler (Auto-sync):**
-- `schedulerConfig` - Interval settings
-- `startScheduler()` - Start auto-sync loop
-- `stopScheduler()` - Stop scheduler
-- `calculateNextSync()` - Compute next sync time
-
-**Persistence:**
-- Uses Zustand persist middleware
-- Stores to LocalStorage: `"gf-board-storage"`
-- Restores on app load
-
-### 2. Slideshow State Machine (useSlideshowMachine.ts)
-
-**State Transitions:**
-```
-IDLE → LOADING → READY → PLAYING ↔ TRANSITIONING
-```
-
-**State Machine Details:**
-
-| State | Trigger | Next State | Action |
-|-------|---------|-----------|--------|
-| IDLE | slides.length > 0 | LOADING | Init loading |
-| LOADING | blob URLs ready | READY | All files loaded |
-| READY | slides ready | PLAYING | Start playback |
-| PLAYING | Duration elapsed | TRANSITIONING | Prepare next slide |
-| TRANSITIONING | 400ms timeout | PLAYING | Show next slide |
-
-**Auto-Advance Logic:**
-- **Images:** 10-second timer
-- **Videos:** Based on actual duration (via `video.duration`)
-  - Fallback: stored duration or default 10s
-
-**Video Playback Fix (Latest):**
-- Only plays when `readyState >= 2` (current frame available)
-- Uses `canplay` event if metadata not yet loaded
-- Sets `currentTime = 0` before playback starts
-- Prevents showing last frame (race condition fix)
-
-**Navigation:**
-- `goToNext()` - Next slide
-- `goToPrev()` - Previous slide
-- `goToSlide(index, direction)` - Jump to specific slide
-
-### 3. Cursor Management (useCursorManagement.ts)
-
-**Recent Optimization for RPi:**
-- Show cursor on mouse movement
-- **50ms debounce** (RPi performance optimization)
-- Auto-hide after 3 seconds of inactivity
-- Uses `document.documentElement` (not just body) for full coverage
-
-### 4. OPFS to Blob Conversion (useMediaBlobUrls.ts)
-
-**Process:**
-1. Memoize mediaFiles to prevent unnecessary re-renders
-2. For each file, check if already loaded
-3. Load file from OPFS using `opfs-tools`
-4. Create blob URL with `URL.createObjectURL()`
-5. Map localPath → blobUrl
-6. Revoke URLs on component unmount
-
-**Memory Management:**
-- Tracks loaded files to avoid duplicate conversions
-- Revokes blob URLs only on unmount (not on every change)
-- Good for stable gym content
-
-### 5. Slide Renderer (Slide.tsx)
-
-**Handles:**
-- Image rendering with `object-fit: contain`
-- Video rendering with proper playback setup
-- Smooth transitions (0.4s CSS animation)
-- Z-index and opacity management for layer ordering
-- Dynamic `src` assignment (only when active slide)
-
-**Recent Fix:**
-- `src={isActive ? slide.href : undefined}` (not empty string)
-- Prevents browser from loading inactive videos unnecessarily
-
----
-
-## Data Flow
-
-### User Interaction Flow
-
-```
-1. LOGIN
-   ┌─────────────────────────────────────┐
-   │ User enters PIN on LoginPage        │
-   └─────────┬───────────────────────────┘
-             │ POST /api/auth/login
-             ↓
-   ┌─────────────────────────────────────┐
-   │ Worker verifies PIN (from KV)       │
-   │ Generates JWT token                 │
-   │ Sets httpOnly cookie                │
-   └─────────┬───────────────────────────┘
-             │ Redirect to /board
-             ↓
-   ┌─────────────────────────────────────┐
-   │ Route checks /api/auth/check        │
-   │ Renders LocationSelectionView       │
-   └─────────────────────────────────────┘
-
-2. LOCATION SELECTION
-   ┌─────────────────────────────────────┐
-   │ User clicks location button         │
-   └─────────┬───────────────────────────┘
-             │ appStore.setSelectedLocation(location)
-             ↓
-   ┌─────────────────────────────────────┐
-   │ Clear OPFS files (new location)     │
-   │ Start syncing                       │
-   │ Render SlideshowView                │
-   └─────────────────────────────────────┘
-
-3. MEDIA SYNC
-   ┌──────────────────────────────────────────┐
-   │ appStore.syncLocationMedia(location)     │
-   └────────┬─────────────────────────────────┘
-            │
-            ├─→ listDriveFolder() - Get Google Drive structure
-            │
-            ├─→ Find "Shared" folder + location folder
-            │
-            ├─→ Collect images & videos from both
-            │
-            ├─→ getLocalFiles() - Check OPFS cache
-            │
-            ├─→ compareFiles()
-            │   ├─ New files → download
-            │   ├─ Updated files → re-download
-            │   ├─ Deleted from Drive → remove from OPFS
-            │   └─ Unchanged → skip
-            │
-            └─→ executeSyncActions()
-                └─ Stream downloads (no RAM overflow on RPi)
-
-4. SLIDESHOW RENDERING
-   ┌──────────────────────────────────────┐
-   │ useMediaBlobUrls hook               │
-   │ - OPFS paths → blob URLs            │
-   │ - Memoized to prevent re-creation   │
-   └─────────┬────────────────────────────┘
-             ↓
-   ┌──────────────────────────────────────┐
-   │ useSlideshowMachine state machine    │
-   │ - Manages IDLE→LOADING→READY→PLAYING │
-   │ - Auto-advances based on media type  │
-   └─────────┬────────────────────────────┘
-             ↓
-   ┌──────────────────────────────────────┐
-   │ Slide components render              │
-   │ - Images: 10s timer                 │
-   │ - Videos: duration-based timer      │
-   │ - Transitions: 0.4s CSS animation   │
-   └──────────────────────────────────────┘
-
-5. NAVIGATION
-   Keyboard:
-   - Right Arrow / Space → Next slide
-   - Left Arrow → Previous slide
-   - L key → Logout
-
-   Touch:
-   - Swipe left → Next slide
-   - Swipe right → Previous slide
-
-   Mouse:
-   - Movement → Show cursor (3s timeout)
-
-6. AUTO-SYNC SCHEDULER
-   ┌──────────────────────────────────────┐
-   │ User selects sync interval           │
-   └────────┬─────────────────────────────┘
-            │ setSchedulerConfig()
-            ↓
-   ┌──────────────────────────────────────┐
-   │ startScheduler()                     │
-   │ - setInterval with selected duration │
-   │ - Calls syncLocationMedia() on tick  │
-   │ - Updates lastSync timestamp         │
-   └──────────────────────────────────────┘
+│   └── index.ts             # Hono API (Cloudflare Workers)
+├── dev-server/              # Local development
+└── dist/                    # Build output
 ```
 
 ---
 
-## Development Guide
+## Core Concepts
 
-### Setup
+### Non-Blocking Sync Architecture
 
-```bash
-# Clone repo
-git clone <repo-url>
-cd gf-board
+The app uses a **non-blocking sync** pattern:
 
-# Install dependencies
-npm install
+1. **App starts immediately** with cached OPFS files
+2. **Background sync** checks for changes on Google Drive
+3. **Only changed files** are downloaded to `/update/` directory
+4. **Files moved** from `/update/` to `/media/` after successful download
+5. **Slideshow continues** uninterrupted during sync
+
+```
+OPFS Structure:
+├── /media/      ← Active files (slideshow reads here)
+└── /update/     ← Temporary download directory (always cleared after sync)
 ```
 
-### Local Development
+### Sync Flow
 
-```bash
-# Start dev server (backend + frontend)
-npm run dev
-
-# Output:
-# Backend: http://localhost:3001
-# Frontend: http://localhost:5000
-
-# Auto-reload on source changes
-# HMR enabled for React components
+```
+triggerSync()
+    ↓
+fetchLocationFiles()     → Get file list from API (with retry)
+    ↓
+compareFiles()           → Determine: new, updated, deleted, unchanged
+    ↓
+deleteFile() × N         → Remove deleted files from /media/
+    ↓
+downloadFile() × N       → Download only new/updated to /update/
+    ↓
+Move files               → Move from /update/ to /media/
+    ↓
+clearDir(/update/)       → Clean up temp directory
+    ↓
+loadLocalMedia()         → Refresh slideshow
 ```
 
-**Dev Server Features:**
-- Local KV storage emulation (`.local-kv.json`)
-- Default PIN: `1234`
-- Google Drive API key: Set in `dev-server/devServer.ts`
-- Parallel processes (managed by `dev-server/dev.ts`)
+### Error Handling & Retry
 
-### Build
-
-```bash
-# Compile TypeScript + bundle
-npm run build
-
-# Output:
-# dist/ - Frontend bundles
-# .wrangler/ - Worker output
-
-# Creates optimized production build
-```
-
-### Testing Locally
-
-**Authentication:**
-```bash
-# PIN: 1234 (in dev mode)
-```
-
-**Google Drive:**
-- Configure folder structure in dev backend
-- Or use mock data for testing
+- **API fetch retry:** 5 attempts with exponential backoff (1min → 15min)
+- **Download timeout:** 10 minutes per file
+- **Download retry:** 5 attempts with exponential backoff
+- **Partial failure:** Keep existing media, clear `/update/`, don't corrupt state
+- **Global handlers:** Catch unhandled errors, prevent app crashes
+- **Offline mode:** If API unreachable but saved PIN exists → continue with cached data
 
 ---
 
-## Deployment Guide
+## Key Files
 
-### Prerequisites
+### Utils (`src/utils/`)
 
-1. Cloudflare account with Workers enabled
-2. Wrangler CLI authenticated: `wrangler login`
-3. Google Drive API key
-4. KV namespace created (ID in wrangler.toml)
-5. Environment variables configured
-
-### Deployment Steps
-
-```bash
-# 1. Build project
-npm run build
-
-# 2. Set environment variables in Cloudflare dashboard
-# - GOOGLE_DRIVE_API_KEY
-# - kiosk_pin (in KV)
-# - jwt_secret (in KV, auto-generated)
-
-# 3. Deploy
-npm run deploy
-
-# Deployed to: gf-board.cloudflare.workers.dev
-# (or custom domain if configured)
-```
-
-### Production Configuration
-
-**Cloudflare KV Store (GF_KIOSK_KV):**
-```json
-{
-  "kiosk_pin": "your-secure-pin",
-  "jwt_secret": "auto-generated-on-first-run"
-}
-```
-
-**Environment Variables:**
-```bash
-GOOGLE_DRIVE_API_KEY=your-api-key
-```
-
-### Monitoring
-
-- Check Cloudflare dashboard for Worker metrics
-- Monitor KV storage usage
-- Review error logs in Workers dashboard
-
----
-
-## Raspberry Pi Specific
-
-### Key Optimizations
-
-#### 1. Memory-Efficient Streaming
-
-**Problem:** RPi has limited RAM (1-4GB). Large file downloads cause OOM.
-
-**Solution (in worker/index.ts):**
-```typescript
-// Stream response instead of buffering
-return new Response(resp.body, {
-  status: resp.status,
-  statusText: resp.statusText,
-  headers: respHeaders
-})
-```
-- Streams files directly from Google Drive
-- No in-memory buffering
-- Critical for video files (100MB+)
-
-#### 2. Cursor Management for Touchscreens
-
-**Problem:** Cursor is distracting on touchscreen kiosks.
-
-**Solution (in useCursorManagement.ts):**
-- Auto-hides cursor after 3 seconds
-- Shows briefly on mouse/keyboard interaction
-- **50ms debounce** for mouse events (RPi CPU optimization)
-- Uses `document.documentElement` for full coverage
-
-#### 3. Performance Optimizations
-
-- **Code Splitting:** TanStack Router autoCodeSplitting
-- **Small Dependencies:** Zustand (lightweight state)
-- **SWC Transpilation:** Faster than Babel
-- **Tailwind CSS v4:** Smaller output
-- **No unused dependencies:** Minimal bundle
-
-#### 4. Browser Compatibility
-
-**Chromium on RPi requirements:**
-- OPFS support (Chromium 94+)
-- H.264 video codec (recommended)
-- Touch event support
-- Hardware acceleration for video
-
-### Recommended RPi Setup
-
-**Hardware:**
-- Raspberry Pi 4B+ (4GB RAM recommended)
-- 5V 3A power supply
-- Passive cooling case
-
-**Software:**
-```bash
-# Raspberry Pi OS (latest)
-# Chromium browser (latest)
-# Node.js 18+
-
-# Deploy
-npm install
-npm run build
-npm run deploy
-```
-
-**Network:**
-- Stable WiFi or Ethernet
-- Auto-sync handles disconnections
-- Offline mode works after initial sync
-
-**Display:**
-- 1080p or 4K supported
-- Full-screen kiosk mode
-- Landscape orientation optimized
-
----
-
-## Recent Fixes & Improvements
-
-### 1. Scheduler Timing Optimization (Latest - November 2025)
-
-**Files:**
-- `src/stores/appStore.ts` - Daily sync time
-- `index.html` - Auto-reload time
-
-**Changes:**
-- Changed daily sync from 4am to 1am
-- Changed auto-reload from midnight to 3am
-
-**Rationale:**
-- 1am sync ensures fresh content before 3am reload
-- 3am reload provides clean slate for daily operation
-- 2-hour gap between sync and reload prevents conflicts
-- Optimized for off-peak hours
-
-**Impact:** Better reliability and content freshness for 24/7 kiosk operation
-
-### 2. PIN Auto-Login & Persistence (Latest - Nov 2025)
-
-**Files:**
-- `src/components/LoginPage.tsx`
-- `src/components/SlideshowView.tsx`
-
-**Features Added:**
-- PIN is saved to localStorage (`gf-kiosk-pin`) on successful login
-- Auto-login on page load if saved PIN exists
-- PIN persists across page reloads and browser restarts
-- PIN is cleared only if it becomes invalid (e.g., admin changes PIN)
-
-**IMPORTANT - Kiosk Behavior:**
-- **NO LOGOUT FUNCTIONALITY** - This is a kiosk, not a user application
-- L-key returns to location selection dashboard but **DOES NOT** clear the PIN
-- Once authenticated, the kiosk stays authenticated indefinitely
-- To clear PIN manually: `localStorage.removeItem('gf-kiosk-pin')` in DevTools
-
-**Why:** Kiosks should not require re-authentication on every restart. Bot protection only, not user sessions.
-
-### 3. Infinite Retry with Exponential Backoff (Nov 2025)
-
-**File:** `src/stores/appStore.ts` (downloadFileFromDrive function)
-
-**Features:**
-- Infinite retry attempts for failed downloads (no max limit)
-- Exponential backoff: 1min → 2min → 4min → 8min → 15min (capped at 15min)
-- Progress logging every 10% during download
-- Detailed console logs for debugging
-
-**Console Output Example:**
-```
-⬇️ Downloading: Gersfeld_FHD.mp4
-📥 Gersfeld_FHD.mp4: 10% (8.6MB / 86.3MB)
-📥 Gersfeld_FHD.mp4: 20% (17.3MB / 86.3MB)
-...
-💾 Saving: Gersfeld_FHD.mp4 (86.32MB)
-✅ Downloaded: Gersfeld_FHD.mp4
-```
-
-**On Error:**
-```
-❌ Download failed: filename.mp4 - ERR_QUIC_PROTOCOL_ERROR
-⏳ Retrying in 60s... (Attempt #1)
-⬇️ Downloading: filename.mp4 (Retry #1)
-```
-
-**Why:** Google Drive and Cloudflare occasionally have temporary network issues. Infinite retries ensure 24/7 kiosk operation without manual intervention.
-
-**Technical Details:**
-- Uses ReadableStream with progress tracking
-- Streams data in chunks to avoid memory issues on RPi
-- Each chunk triggers progress calculation
-- Blob reassembled from chunks after complete download
-
-### 4. Cursor Management for RPi
-
-**File:** `src/components/slideshow/hooks/useCursorManagement.ts`
-
-**Changes:**
-- Changed from `document.body` to `document.documentElement`
-- Added 50ms debounce on mousemove events
-- Improved cleanup to prevent memory leaks
-
-**Why:** RPi CPU is limited; debouncing reduces event processing
-
-### 5. Video Playback Race Condition Fix
-
-**File:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
-
-**Problem:** Videos briefly showed last frame before playing from start
-
-**Solution:**
-- Only play when `readyState >= 2` (frame available)
-- Use `canplay` event for reliability
-- Set `currentTime = 0` before playback
-
-**Impact:** Eliminated visual flicker during video transitions
-
-### 6. Removed Unnecessary Timer Margin
-
-**File:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
-
-**Before:**
-```typescript
-const duration = Math.ceil(actualDuration * 1000) + 500  // +500ms wasted
-```
-
-**After:**
-```typescript
-const duration = Math.ceil(actualDuration * 1000)  // Exact duration
-```
-
-**Impact:** Removed 500ms waste per video (10% faster slideshow)
-
-### 7. Dynamic Video `src` Assignment
-
-**File:** `src/components/Slide.tsx`
-
-**Before:**
-```typescript
-src={slide.href}  // Always set, even for inactive slides
-```
-
-**After:**
-```typescript
-src={isActive ? slide.href : undefined}  // Only when active
-```
-
-**Impact:** Prevents browser from pre-loading inactive videos
-
-### 8. Console Logging Cleanup
-
-**Files:** `src/components/slideshow/hooks/useSlideshowMachine.ts`
-
-**Change:** Commented out all console.log() statements
-
-**Why:**
-- Reduces CPU overhead on RPi
-- Prevents memory leaks from accumulated logs
-- Can be re-enabled for debugging
-
----
-
-## Known Issues & Debugging
-
-### Common Issues
-
-#### 1. "One or more errors occurred while starting the app"
-
-**Cause:** OPFS not available or corrupted
-
-**Fix:**
-```javascript
-// Clear OPFS in browser console
-if (window.navigator.storage?.getDirectory) {
-  const root = await window.navigator.storage.getDirectory();
-  for await (const [name, handle] of root) {
-    await root.removeEntry(name, { recursive: true });
-  }
-}
-```
-
-#### 2. Videos don't play from start
-
-**Cause:** Race condition between loading and playback
-
-**Status:** FIXED (see recent fixes section)
-
-**Debug:** Check console logs (uncomment in useSlideshowMachine.ts)
-
-#### 3. Sync hangs on RPi
-
-**Cause:** Large file downloads without streaming
-
-**Status:** FIXED (worker uses Response streaming)
-
-**Debug:** Check Cloudflare Worker logs
-
-#### 4. Cursor not hiding on touchscreen
-
-**Cause:** Touch events not mapped correctly
-
-**Status:** Documented workaround available
-
-**Debug:** Enable cursor logs and check event firing
-
-### Re-Enabling Debug Logs
-
-```typescript
-// In useSlideshowMachine.ts, uncomment these lines:
-// console.log(`🔄 [STATE] ${state}`)
-// console.log(`📺 [PLAYING] Slide ${currentIndex}...`)
-// console.log(`   ▶️ Playing`)
-// etc.
-```
-
-### Performance Profiling on RPi
-
-```bash
-# SSH into RPi
-ssh pi@<ip-address>
-
-# Check memory usage
-free -h
-
-# Check CPU usage
-top
-
-# Monitor network
-iftop
-
-# Check browser performance (in Chromium console)
-# Enable DevTools for remote debugging
-```
-
----
-
-## Environment Variables
-
-### Development
-
-```bash
-# dev-server/devServer.ts
-BACKEND_PORT=3001
-FRONTEND_PORT=5000
-GOOGLE_DRIVE_API_KEY=test-key
-```
-
-### Production (Cloudflare)
-
-**Required:**
-- `GOOGLE_DRIVE_API_KEY` - Google Drive API key
-
-**KV Store (GF_KIOSK_KV):**
-- `kiosk_pin` - Authentication PIN
-- `jwt_secret` - JWT signing key (auto-generated)
-
----
-
-## File Reference by Purpose
-
-### Frontend Components
-| File | Purpose | Size |
-|------|---------|------|
-| `src/components/LoginPage.tsx` | PIN authentication UI | 100 lines |
-| `src/components/LocationSelectionView.tsx` | Location picker + scheduler UI | 140 lines |
-| `src/components/SlideshowView.tsx` | Main slideshow orchestration | 123 lines |
-| `src/components/Slide.tsx` | Individual slide rendering | 109 lines |
-
-### Custom Hooks
-| File | Purpose | Size |
-|------|---------|------|
-| `src/components/slideshow/hooks/useSlideshowMachine.ts` | Slideshow state machine | 202 lines |
-| `src/components/slideshow/hooks/useMediaBlobUrls.ts` | OPFS to blob conversion | 83 lines |
-| `src/components/slideshow/hooks/useCursorManagement.ts` | Cursor auto-hide | 52 lines |
-
-### State Management
-| File | Purpose | Size |
-|------|---------|------|
-| `src/stores/appStore.ts` | Core Zustand store | 607 lines |
-
-### Backend
-| File | Purpose | Size |
-|------|---------|------|
-| `worker/index.ts` | Hono API server | 237 lines |
-
-### Development
-| File | Purpose | Size |
-|------|---------|------|
-| `dev-server/dev.ts` | Process manager | ~40 lines |
-| `dev-server/devServer.ts` | Hono dev server | 69 lines |
-| `dev-server/localKV.ts` | KV emulation | 78 lines |
-
-### Configuration
 | File | Purpose |
 |------|---------|
-| `vite.config.ts` | Vite build config |
-| `wrangler.toml` | Cloudflare Workers config |
-| `tsconfig.base.json` | Base TypeScript config |
-| `index.html` | Entry point + 3am reload |
+| `opfs.ts` | OPFS operations: read, write, list, delete, directories |
+| `download.ts` | Download with 10min timeout, streaming to blob |
+| `sync.ts` | Background sync, file comparison, retry logic |
+| `errors.ts` | Safe async wrappers, global error handlers |
+
+### Store (`src/stores/appStore.ts`)
+
+Zustand store with:
+- `selectedLocation` - Current gym
+- `mediaFiles` - Array of media objects
+- `syncStatus` - Syncing state, errors, messages
+- `schedulerConfig` - Auto-sync settings (interval, enabled)
+- `triggerSync()` - Start background sync
+- `loadLocalMedia()` - Load from OPFS
+- `startScheduler()` - Start auto-sync timer
+
+### Slideshow Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useSlideshowMachine` | State machine: IDLE → LOADING → READY → PLAYING |
+| `useMediaBlobUrls` | Convert OPFS files to blob URLs |
 
 ---
 
-## Quick Command Reference
+## Features
+
+### Locations
+
+5 German gym locations with separate content:
+- Flieden, Neuhof, Gersfeld, Schlitz, Eichenzell
+
+### Sync Intervals (configurable in dashboard)
+
+- 5 minutes
+- 4 hours
+- 8 hours
+- Daily at 1:00 AM (default)
+
+### Auto-Reload
+
+Page reloads at 3:00 AM for fresh state.
+
+### Authentication
+
+- PIN-based login
+- JWT token (10-year validity for kiosk)
+- Stored in httpOnly cookie
+- PIN cached in localStorage for auto-login
+- **Offline mode:** Works without API if PIN is saved
+
+### Keyboard Navigation
+
+- `→` / `Space` - Next slide
+- `←` - Previous slide
+- `L` - Return to location selection
+
+---
+
+## Offline-First Design
+
+The kiosk is designed to work without internet after initial setup:
+
+1. **Saved PIN** in localStorage allows bypass of auth check when API is down
+2. **OPFS cache** stores all media files locally
+3. **Sync failures** don't crash the app - it continues with existing content
+4. **Retry logic** automatically recovers when connection returns
+
+---
+
+## Development
+
+### Environment Variables
+
+**Dev (`dev-server/`):**
+```
+BACKEND_PORT=3001
+FRONTEND_PORT=5000
+RANDOM_ERROR_RATE=0-100  # Percentage of API calls that fail (testing)
+Default PIN: 1234
+```
+
+**Production (Cloudflare):**
+```
+GOOGLE_DRIVE_API_KEY     # Environment variable
+KIOSK_PIN                # Environment variable
+JWT_SECRET               # Environment variable
+```
+
+### Google Drive Structure
+
+```
+Root Folder/
+├── Shared/              ← Content for all locations
+├── Flieden/             ← Location-specific
+├── Neuhof/
+├── Gersfeld/
+├── Schlitz/
+└── Eichenzell/
+```
+
+### Testing Error Handling
 
 ```bash
-# Development
-npm run dev              # Start dev server
-
-# Building
-npm run build            # Build for production
-npm run build:frontend   # Build only frontend
-npm run build:worker     # Build only worker
-
-# Deployment
-npm run deploy           # Deploy to Cloudflare Workers
-
-# Linting
-npm run lint             # Run ESLint
-npm run lint:fix         # Fix linting issues
-
-# Type checking
-npm run tsc              # Check types
+npm run dev:error  # 30% of API calls randomly fail with 500/503/timeout
 ```
 
 ---
 
-## Notes for Future Development
+## Debugging
 
-### Architecture Decisions
+### Clear OPFS
 
-1. **Zustand over Redux:** Lightweight, minimal boilerplate
-2. **Cloudflare Workers:** Edge computing, no server maintenance
-3. **OPFS for caching:** Native browser storage, no size limits
-4. **Streaming downloads:** Prevents OOM on RPi
-5. **State machine for slideshow:** Predictable, debuggable transitions
+```javascript
+// Browser console
+const root = await navigator.storage.getDirectory();
+for await (const [name] of root) {
+  await root.removeEntry(name, { recursive: true });
+}
+```
 
-### Performance Considerations
+### Clear Saved PIN
 
-- OPFS caching eliminates repeated downloads
-- Streaming prevents memory spikes
-- CSS transitions hardware-accelerated
-- Debouncing reduces event processing
-- Code splitting enables lazy loading
+```javascript
+localStorage.removeItem('gf-kiosk-pin')
+```
 
-### Security
+### Check Scheduler Status
 
-- JWT tokens (10-year validity for kiosk)
-- httpOnly cookies
-- CORS configured
-- Google Drive API key in environment
-- PIN stored in Cloudflare KV
+Console shows: `⏰ Scheduler active: daily1am, next sync: 31.12.2025, 01:00:00`
 
-### Future Enhancements
-
-- [ ] Add video fade-in effects
-- [ ] Multi-language support
-- [ ] Advanced analytics
-- [ ] Scheduled content updates
-- [ ] Weather/information displays
-- [ ] Rotation schedules by time of day
-- [ ] Admin dashboard for content management
-
----
-
-## Support & Debugging
-
-### Browser Console Logs
-
-Enable in `useSlideshowMachine.ts` by uncommenting console statements
-
-### Cloudflare Dashboard
-
-- Workers metrics & logs
-- KV storage monitoring
-- Error tracking
-
-### Local Development
+### RPi Monitoring
 
 ```bash
-# SSH into RPi during deployment
-ssh pi@<ip>
+# Memory
+watch -n 1 'free -h'
 
-# Check app status
+# Chromium processes
 ps aux | grep chromium
-
-# View Chromium logs (if available)
-cat ~/.config/chromium/Default/console-log
-
-# Monitor system resources
-watch -n 1 'free -h && echo "---" && top -bn1 | head -12'
 ```
+
+---
+
+## Raspberry Pi Optimizations
+
+### Memory
+
+- **Streaming downloads:** No buffering large files in RAM
+- **OPFS storage:** Files on disk, not in memory
+- **Blob URL management:** Revoke on unmount
+
+### Performance
+
+- **CSS cursor hiding:** No JS event listeners
+- **Code splitting:** Lazy load routes
+- **Minimal dependencies:** Zustand over Redux
+
+### Reliability
+
+- **Offline-first:** Works without network after initial sync
+- **Auto-recovery:** Retry failed downloads and API calls
+- **No partial states:** Only swap complete downloads
+
+---
+
+## Recent Changes (December 2025)
+
+### Non-Blocking Sync Refactor
+
+- Slideshow starts immediately with cached files
+- Sync runs in background, only downloads changed files
+- No more copying unchanged files around
+- `/update/` directory always cleared after sync
+
+### Retry Logic for All API Calls
+
+- `fetchLocationFiles()` now retries on failure
+- Exponential backoff: 1min → 2min → 4min → 8min → 15min
+- Up to 5 retry attempts
+
+### Offline Mode
+
+- If auth check fails but saved PIN exists → allow access
+- Kiosk continues working when Cloudflare is down
+
+### Dev Error Simulation
+
+- `npm run dev:error` for testing error handling
+- Randomly returns 500, 503, or timeout on API calls
+
+---
+
+## Known Issues
+
+### Chromium "Aw, Snap!" Error 5
+
+**Cause:** Out of memory after weeks of operation.
+
+**Workaround:** 
+- 3am auto-reload helps
+- Consider weekly Chromium restart via systemd
 
 ---
 
 ## Glossary
 
-- **OPFS:** Origin Private File System - Browser storage API
-- **Blob URL:** `blob:http://...` URL pointing to in-memory file
-- **KV:** Key-Value store (Cloudflare)
-- **JWT:** JSON Web Token for authentication
-- **Wrangler:** Cloudflare CLI tool
-- **RPi:** Raspberry Pi
-- **SPA:** Single Page Application
-- **HMR:** Hot Module Replacement (dev feature)
-
----
-
-**End of Documentation**
-
-Last Updated: November 20, 2025
-Maintained by: Development Team
-Contact: [Your contact info]
+| Term | Meaning |
+|------|---------|
+| OPFS | Origin Private File System - Browser storage API |
+| Blob URL | `blob:http://...` URL for in-memory file |
+| RPi | Raspberry Pi |

@@ -1,40 +1,41 @@
 {
-	"name": "gf-kiosk",
-	"private": true,
-	"version": "0.0.0",
-	"type": "module",
-	"scripts": {
-		"dev": "bun --watch dev-server/dev.ts",
-		"build": "tsc -b && vite build",
-		"lint": "eslint .",
-		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && wrangler deploy --keep-vars",
-		"cf-typegen": "wrangler types"
-	},
-	"dependencies": {
-		"@tailwindcss/vite": "^4.1.17",
-		"@tanstack/react-router": "^1.134.15",
-		"@tanstack/router-plugin": "^1.134.15",
-		"hono": "^4.10.4",
-		"opfs-tools": "^0.7.4",
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0",
-		"zustand": "^5.0.8"
-	},
-	"devDependencies": {
-		"@cloudflare/vite-plugin": "^1.14.0",
-		"@eslint/js": "^9.39.1",
-		"@types/bun": "^1.3.2",
-		"@types/react": "^19.2.2",
-		"@types/react-dom": "^19.2.2",
-		"@vitejs/plugin-react-swc": "^4.2.1",
-		"eslint": "^9.39.1",
-		"eslint-plugin-react-hooks": "^5.2.0",
-		"eslint-plugin-react-refresh": "^0.4.24",
-		"globals": "^16.5.0",
-		"typescript": "~5.8.3",
-		"typescript-eslint": "^8.46.3",
-		"vite": "^7.2.2",
-		"wrangler": "^4.46.0"
-	}
+  "name": "gf-kiosk",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch dev-server/dev.ts",
+    "dev:error": "RANDOM_ERROR_RATE=30 bun --watch dev-server/dev.ts",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "npm run build && vite preview",
+    "deploy": "npm run build && wrangler deploy --keep-vars",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@tanstack/react-router": "^1.134.15",
+    "@tanstack/router-plugin": "^1.134.15",
+    "hono": "^4.10.4",
+    "opfs-tools": "^0.7.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.14.0",
+    "@eslint/js": "^9.39.1",
+    "@types/bun": "^1.3.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react-swc": "^4.2.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.46.3",
+    "vite": "^7.2.2",
+    "wrangler": "^4.46.0"
+  }
 }
