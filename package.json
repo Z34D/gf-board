@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --watch dev-server/dev.ts",
     "dev:error": "RANDOM_ERROR_RATE=30 bun --watch dev-server/dev.ts",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node -e \"const fs=require('fs');const f='dist/client/sw.js';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('__BUILD_TIME__',Date.now()))\"",
     "lint": "eslint .",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy --keep-vars",
