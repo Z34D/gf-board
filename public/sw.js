@@ -49,6 +49,7 @@ self.addEventListener("fetch", (event) => {
         // Return cache immediately, update in background
         fetch(event.request)
           .then((response) => {
+            // Only cache successful responses (not error pages)
             if (response.ok) {
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(event.request, response);
@@ -62,12 +63,14 @@ self.addEventListener("fetch", (event) => {
       // Not in cache - fetch and cache
       return fetch(event.request)
         .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, clone);
-            });
+          // If server returns error (502, 503, etc), try cache first
+          if (!response.ok) {
+            return caches.match("/") || response;
           }
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone);
+          });
           return response;
         })
         .catch(() => {

@@ -78,6 +78,11 @@ export async function downloadFile(
     if (error instanceof DOMException && error.name === "AbortError") {
       console.error(`⏱️ Download timeout: ${fileName}`);
     } else {
+      const message = error instanceof Error ? error.message : "";
+      // Check for network errors - throw to abort sync entirely
+      if (message.includes("fetch") || message.includes("network")) {
+        throw new Error("Network offline");
+      }
       console.error(`❌ Download failed: ${fileName}`, error);
     }
     return false;

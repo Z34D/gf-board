@@ -16,8 +16,9 @@
 ## Commands
 
 ```bash
-npm run dev        # Start dev server
+npm run dev        # Start dev server (port 5000)
 npm run dev:error  # Dev with 30% random API errors (testing)
+npm run dev:502    # Dev with 502 simulation (test Service Worker)
 npm run build      # Build for production
 npm run deploy     # Deploy to Cloudflare Workers
 ```
@@ -30,6 +31,8 @@ npm run deploy     # Deploy to Cloudflare Workers
 
 ```
 Raspberry Pi (Chromium)
+├── Service Worker (offline caching)
+├── Chrome Extension (crash detection)
     ↓ HTTPS
 Cloudflare Workers (Hono API)
     ↓
@@ -59,17 +62,75 @@ gf-board/
 │   └── routes/              # TanStack Router
 ├── worker/
 │   └── index.ts             # Hono API (Cloudflare Workers)
+├── public/
+│   └── sw.js                # Service Worker (offline support)
+├── extension/               # Chrome extension (crash recovery)
+│   ├── manifest.json
+│   ├── background.js
+│   └── content.js
 ├── dev-server/              # Local development
 └── dist/                    # Build output
 ```
 
 ---
 
-## Core Concepts
+## Offline-First Architecture
 
-### Non-Blocking Sync Architecture
+The app is designed to work without internet after initial setup:
 
-The app uses a **non-blocking sync** pattern:
+### Three Layers of Resilience
+
+1. **Service Worker** - Caches app shell, serves from cache when Cloudflare is down
+2. **OPFS** - Stores media files locally, slideshow works offline
+3. **Chrome Extension** - Detects browser crashes, auto-reloads with backoff
+
+### Service Worker (`public/sw.js`)
+
+**Strategy:** Cache-first with background update
+
+- Caches app shell (`/`, `/index.html`) on install
+- Serves cached version immediately
+- Updates cache in background when online
+- **Does NOT cache error responses** (502, 503, etc.)
+- Falls back to cached `/` when server returns error
+- Cache busting via `BUILD_TIME` timestamp on each deploy
+
+```javascript
+// Cache-first: instant offline response
+caches.match(request).then(cached => {
+  if (cached) {
+    // Update in background, return cached immediately
+    fetch(request).then(response => {
+      if (response.ok) cache.put(request, response);
+    });
+    return cached;
+  }
+  // Not cached - fetch and cache
+  return fetch(request);
+});
+```
+
+### Chrome Extension (`extension/`)
+
+**Purpose:** Detect browser crashes that Service Worker can't handle
+
+Detects:
+- "Aw, Snap!" / "Hoppla!" error pages
+- Error code 5 (STATUS_ACCESS_VIOLATION)
+- Error code 6 (Out of Memory)
+- `chrome-error://` URLs
+
+**Does NOT detect** (handled by Service Worker instead):
+- HTTP errors (500, 502, 503, 504)
+- Cloudflare error pages
+
+**Auto-reload with backoff:** 1s → 2s → 3s → 4s → 5s (capped)
+
+---
+
+## Sync Architecture
+
+### Non-Blocking Sync Pattern
 
 1. **App starts immediately** with cached OPFS files
 2. **Background sync** checks for changes on Google Drive
@@ -88,7 +149,7 @@ OPFS Structure:
 ```
 triggerSync()
     ↓
-fetchLocationFiles()     → Get file list from API (with retry)
+fetchLocationFiles()     → Get file list from API
     ↓
 compareFiles()           → Determine: new, updated, deleted, unchanged
     ↓
@@ -103,14 +164,31 @@ clearDir(/update/)       → Clean up temp directory
 loadLocalMedia()         → Refresh slideshow
 ```
 
-### Error Handling & Retry
+### Network Error Handling
 
-- **API fetch retry:** 5 attempts with exponential backoff (1min → 15min)
-- **Download timeout:** 10 minutes per file
-- **Download retry:** 5 attempts with exponential backoff
-- **Partial failure:** Keep existing media, clear `/update/`, don't corrupt state
-- **Global handlers:** Catch unhandled errors, prevent app crashes
-- **Offline mode:** If API unreachable but saved PIN exists → continue with cached data
+**Network offline** (`ERR_INTERNET_DISCONNECTED`, `Failed to fetch`):
+- Sync aborts immediately (no retry)
+- App continues with cached media
+- Next scheduled sync will retry
+
+**Server errors** (500, 502, 503):
+- Service Worker serves cached app
+- API calls fail, sync aborts
+- Media files still work from OPFS
+
+**Download timeout** (10 minutes per file):
+- File marked as failed
+- Retry up to 5 times with exponential backoff
+- Other files continue downloading
+
+### Automatic Recovery
+
+| Time | Action |
+|------|--------|
+| 1:00 AM | Scheduled sync (configurable) |
+| 3:00 AM | Auto page reload (fresh state) |
+
+If network returns at 2 AM, the 3 AM reload will sync everything.
 
 ---
 
@@ -121,8 +199,8 @@ loadLocalMedia()         → Refresh slideshow
 | File | Purpose |
 |------|---------|
 | `opfs.ts` | OPFS operations: read, write, list, delete, directories |
-| `download.ts` | Download with 10min timeout, streaming to blob |
-| `sync.ts` | Background sync, file comparison, retry logic |
+| `download.ts` | Download with 10min timeout, streaming to blob, network error detection |
+| `sync.ts` | Background sync, file comparison, immediate abort on network failure |
 | `errors.ts` | Safe async wrappers, global error handlers |
 
 ### Store (`src/stores/appStore.ts`)
@@ -161,7 +239,7 @@ Zustand store with:
 
 ### Auto-Reload
 
-Page reloads at 3:00 AM for fresh state.
+Page reloads at 3:00 AM for fresh state (configured in `index.html`).
 
 ### Authentication
 
@@ -176,17 +254,6 @@ Page reloads at 3:00 AM for fresh state.
 - `→` / `Space` - Next slide
 - `←` - Previous slide
 - `L` - Return to location selection
-
----
-
-## Offline-First Design
-
-The kiosk is designed to work without internet after initial setup:
-
-1. **Saved PIN** in localStorage allows bypass of auth check when API is down
-2. **OPFS cache** stores all media files locally
-3. **Sync failures** don't crash the app - it continues with existing content
-4. **Retry logic** automatically recovers when connection returns
 
 ---
 
@@ -221,11 +288,23 @@ Root Folder/
 └── Eichenzell/
 ```
 
-### Testing Error Handling
+### Testing
 
 ```bash
-npm run dev:error  # 30% of API calls randomly fail with 500/503/timeout
+# Test error handling (random API failures)
+npm run dev:error
+
+# Test Service Worker with 502 errors
+npm run dev:502
+# Then use DevTools → Network → Offline to test SW fallback
 ```
+
+### Installing Chrome Extension
+
+1. Open `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `extension/` folder
 
 ---
 
@@ -245,6 +324,13 @@ for await (const [name] of root) {
 
 ```javascript
 localStorage.removeItem('gf-kiosk-pin')
+```
+
+### Unregister Service Worker
+
+```javascript
+// Browser console
+navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
 ```
 
 ### Check Scheduler Status
@@ -273,42 +359,46 @@ ps aux | grep chromium
 
 ### Performance
 
-- **CSS cursor hiding:** No JS event listeners
+- **CSS cursor hiding:** No JS event listeners for mouse hide
 - **Code splitting:** Lazy load routes
 - **Minimal dependencies:** Zustand over Redux
+- **React 19:** Automatic memoization (no useCallback needed)
 
 ### Reliability
 
 - **Offline-first:** Works without network after initial sync
-- **Auto-recovery:** Retry failed downloads and API calls
+- **Service Worker:** Cached app shell survives Cloudflare outages
+- **Extension:** Auto-recovers from browser crashes
 - **No partial states:** Only swap complete downloads
 
 ---
 
 ## Recent Changes (December 2025)
 
-### Non-Blocking Sync Refactor
+### Service Worker for Offline Support
 
-- Slideshow starts immediately with cached files
-- Sync runs in background, only downloads changed files
-- No more copying unchanged files around
-- `/update/` directory always cleared after sync
+- `public/sw.js` caches app shell
+- Cache-first strategy for instant offline response
+- Only caches successful responses (`response.ok`)
+- Cache busting with `BUILD_TIME` on each build
+- Falls back to cached `/` when server returns 502/503
 
-### Retry Logic for All API Calls
+### Chrome Extension Simplified
 
-- `fetchLocationFiles()` now retries on failure
-- Exponential backoff: 1min → 2min → 4min → 8min → 15min
-- Up to 5 retry attempts
+- Removed HTTP error detection (now handled by Service Worker)
+- Only detects browser crashes ("Aw, Snap!", Error 5/6)
+- Auto-reload with n+1 second backoff
 
-### Offline Mode
+### Network Error Handling
 
-- If auth check fails but saved PIN exists → allow access
-- Kiosk continues working when Cloudflare is down
+- Sync aborts immediately on network failure (no infinite retry)
+- App continues with cached media
+- Recovery on next scheduled sync or page reload
 
-### Dev Error Simulation
+### Dev Testing Commands
 
-- `npm run dev:error` for testing error handling
-- Randomly returns 500, 503, or timeout on API calls
+- `npm run dev:502` - Simulate Cloudflare 502 errors
+- Test Service Worker behavior before production
 
 ---
 
@@ -318,8 +408,9 @@ ps aux | grep chromium
 
 **Cause:** Out of memory after weeks of operation.
 
-**Workaround:** 
-- 3am auto-reload helps
+**Mitigation:** 
+- Chrome Extension detects and auto-reloads
+- 3 AM auto-reload helps
 - Consider weekly Chromium restart via systemd
 
 ---
@@ -330,4 +421,5 @@ ps aux | grep chromium
 |------|---------|
 | OPFS | Origin Private File System - Browser storage API |
 | Blob URL | `blob:http://...` URL for in-memory file |
+| SW | Service Worker - Offline caching layer |
 | RPi | Raspberry Pi |

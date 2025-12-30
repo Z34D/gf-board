@@ -3,6 +3,8 @@ import app from "../worker/index";
 const BACKEND_PORT = Number(process.env.BACKEND_PORT || 3001);
 const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 5000);
 const RANDOM_ERROR_RATE = Number(process.env.RANDOM_ERROR_RATE || 0); // 0-100, percentage chance of error
+const SIMULATE_502 =
+  process.env.SIMULATE_502 === "true" || Bun.argv.includes("--502"); // Simulate Cloudflare 502 for all pages
 
 async function main() {
   const jwtSecret =
@@ -21,6 +23,9 @@ async function main() {
   console.log(`📁 Using Root Folder ID: ${rootFolderId}`);
   if (RANDOM_ERROR_RATE > 0) {
     console.log(`🎲 Random errors enabled: ${RANDOM_ERROR_RATE}% chance`);
+  }
+  if (SIMULATE_502) {
+    console.log(`🔴 502 simulation enabled - all page requests return 502`);
   }
   if (!apiKey) {
     console.warn("⚠️  GOOGLE_DRIVE_API_KEY not set in environment");
@@ -60,6 +65,23 @@ async function main() {
   const server = Bun.serve({
     port: BACKEND_PORT,
     fetch: (req: Request) => {
+      const url = new URL(req.url);
+
+      // Simulate Cloudflare 502 for page requests (not API)
+      if (SIMULATE_502 && !url.pathname.startsWith("/api/")) {
+        return new Response(
+          `<!DOCTYPE html>
+          <html>
+          <head><title>502 Bad Gateway</title></head>
+          <body>
+            <h1>502 Bad Gateway</h1>
+            <p>cloudflare - Web server is down</p>
+          </body>
+          </html>`,
+          { status: 502, headers: { "Content-Type": "text/html" } },
+        );
+      }
+
       // Random error simulation for testing
       if (RANDOM_ERROR_RATE > 0 && Math.random() * 100 < RANDOM_ERROR_RATE) {
         const url = new URL(req.url);

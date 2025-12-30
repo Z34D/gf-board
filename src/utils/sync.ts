@@ -76,45 +76,32 @@ export function abortSync(): void {
 
 /**
  * Fetches file list for a location from the API
- * Includes retry logic with exponential backoff
+ * Aborts immediately on network errors (offline), retries only on server errors
  *
  * @param location - Gym location name (e.g., "Gersfeld")
- * @param maxRetries - Maximum retry attempts (default: 5)
  * @returns Array of files from Google Drive
- * @throws Error if all retries fail
+ * @throws Error on network failure or after retries exhausted
  */
 export async function fetchLocationFiles(
   location: string,
-  maxRetries: number = 5,
 ): Promise<DriveFile[]> {
-  let lastError: Error | null = null;
+  try {
+    const response = await fetch(`/api/locations/${location}/files`);
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(`/api/locations/${location}/files`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.files || [];
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error("Unknown error");
-
-      if (attempt < maxRetries) {
-        const delay = calculateRetryDelay(attempt);
-        console.log(
-          `⏳ Fetch failed (${lastError.message}), retrying in ${delay / 1000}s...`,
-        );
-        await wait(delay);
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
-  }
 
-  throw new Error(
-    `Failed to fetch files after ${maxRetries} retries: ${lastError?.message}`,
-  );
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    // Network errors - abort immediately, don't retry
+    if (message.includes("fetch") || message.includes("network")) {
+      throw new Error(`Network offline - sync aborted`);
+    }
+    throw error;
+  }
 }
 
 /**
