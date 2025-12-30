@@ -353,6 +353,73 @@ ps aux | grep chromium
 
 ## Raspberry Pi Optimizations
 
+### Optimized Chromium Kiosk Command
+
+```bash
+chromium-browser \
+  # === KIOSK & WINDOW ===
+  --start-maximized \
+  --start-fullscreen \
+  --user-data-dir=$HOME/.chromium-kiosk \
+  --ozone-platform=wayland \
+  \
+  # === MEMORY OPTIMIZATION (wichtig für Pi!) ===
+  --disable-dev-shm-usage \
+  --memory-pressure-off \
+  \
+  # === DISABLE BACKGROUND ACTIVITY ===
+  --disable-background-networking \
+  --disable-background-timer-throttling \
+  --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
+  --disable-component-update \
+  --disable-sync \
+  --disable-domain-reliability \
+  \
+  # === DISABLE UI INTERRUPTIONS ===
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-hang-monitor \
+  --disable-prompt-on-repost \
+  --disable-session-crashed-bubble \
+  --disable-restore-session-state \
+  --no-first-run \
+  \
+  # === DISABLE UNNECESSARY FEATURES ===
+  --disable-client-side-phishing-detection \
+  --disable-default-apps \
+  --password-store=basic \
+  --use-mock-keychain \
+  \
+  # === FEATURES ===
+  --enable-features=OverlayScrollbar \
+  --disable-features=Translate,TranslateUI \
+  \
+  "https://gf-kiosk.brandwork.tech/"
+```
+
+**One-liner für labwc autostart (Fullscreen, F11 zum Verlassen):**
+```bash
+chromium-browser --start-maximized --start-fullscreen --user-data-dir=$HOME/.chromium-kiosk --ozone-platform=wayland --disable-dev-shm-usage --memory-pressure-off --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-component-update --disable-sync --disable-domain-reliability --noerrdialogs --disable-infobars --disable-hang-monitor --disable-prompt-on-repost --disable-session-crashed-bubble --disable-restore-session-state --no-first-run --disable-client-side-phishing-detection --disable-default-apps --password-store=basic --use-mock-keychain --enable-features=OverlayScrollbar --disable-features=Translate,TranslateUI "https://gf-kiosk.brandwork.tech/" &
+```
+
+**One-liner mit echtem Kiosk-Modus (versteckt Cursor, kein Escape möglich):**
+```bash
+chromium-browser --kiosk --user-data-dir=$HOME/.chromium-kiosk --ozone-platform=wayland --disable-dev-shm-usage --memory-pressure-off --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-component-update --disable-sync --disable-domain-reliability --noerrdialogs --disable-infobars --disable-hang-monitor --disable-prompt-on-repost --disable-session-crashed-bubble --disable-restore-session-state --no-first-run --disable-client-side-phishing-detection --disable-default-apps --password-store=basic --use-mock-keychain --enable-features=OverlayScrollbar --disable-features=Translate,TranslateUI "https://gf-kiosk.brandwork.tech/" &
+```
+
+| Modus | Flag | Cursor | Escape |
+|-------|------|--------|--------|
+| Fullscreen | `--start-fullscreen` | Sichtbar | F11 |
+| Kiosk | `--kiosk` | Versteckt | Nicht möglich (SSH/VNC nötig) |
+
+| Flag-Gruppe | Zweck |
+|-------------|-------|
+| Memory | Verhindert Out-of-Memory, limitiert Cache |
+| Background | Keine Hintergrund-Netzwerkaktivität, spart CPU/RAM |
+| UI | Keine Dialoge, keine Restore-Bubble, keine Infobars |
+| Features | Kein Keyring-Popup, keine Extensions, kein Translate |
+
 ### Memory
 
 - **Streaming downloads:** No buffering large files in RAM
