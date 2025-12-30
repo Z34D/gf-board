@@ -32,7 +32,7 @@ npm run deploy     # Deploy to Cloudflare Workers
 ```
 Raspberry Pi (Chromium)
 ├── Service Worker (offline caching)
-├── Chrome Extension (crash detection)
+├── Snapper Extension (crash detection)
     ↓ HTTPS
 Cloudflare Workers (Hono API)
     ↓
@@ -64,10 +64,6 @@ gf-board/
 │   └── index.ts             # Hono API (Cloudflare Workers)
 ├── public/
 │   └── sw.js                # Service Worker (offline support)
-├── extension/               # Chrome extension (crash recovery)
-│   ├── manifest.json
-│   ├── background.js
-│   └── content.js
 ├── dev-server/              # Local development
 └── dist/                    # Build output
 ```
@@ -82,7 +78,7 @@ The app is designed to work without internet after initial setup:
 
 1. **Service Worker** - Caches app shell, serves from cache when Cloudflare is down
 2. **OPFS** - Stores media files locally, slideshow works offline
-3. **Chrome Extension** - Detects browser crashes, auto-reloads with backoff
+3. **Snapper Extension** - Detects browser crashes, auto-reloads (external Chrome extension)
 
 ### Service Worker (`public/sw.js`)
 
@@ -110,21 +106,28 @@ caches.match(request).then(cached => {
 });
 ```
 
-### Chrome Extension (`extension/`)
+### Snapper Chrome Extension
 
 **Purpose:** Detect browser crashes that Service Worker can't handle
 
-Detects:
-- "Aw, Snap!" / "Hoppla!" error pages
-- Error code 5 (STATUS_ACCESS_VIOLATION)
-- Error code 6 (Out of Memory)
-- `chrome-error://` URLs
+We use the external "Snapper" extension from the Chrome Web Store:
+- **Chrome Web Store:** https://chromewebstore.google.com/detail/snapper-aw-snap-tab-reloa/jehgbfogcmbekbbcadldojojckehlkbi
+- **GitHub:** https://github.com/bizplay/snapper
+
+**How it works:**
+- Polls all tabs every 30 seconds
+- Executes a no-op (`1+1`) via `chrome.scripting.executeScript()`
+- If `chrome.runtime.lastError` is set → tab is crashed
+- Auto-reloads crashed tabs
+
+**Detects:**
+- "Aw, Snap!" crash pages
+- Unresponsive tabs
+- Out of memory crashes
 
 **Does NOT detect** (handled by Service Worker instead):
 - HTTP errors (500, 502, 503, 504)
 - Cloudflare error pages
-
-**Auto-reload with backoff:** 1s → 2s → 3s → 4s → 5s (capped)
 
 ---
 
@@ -299,12 +302,11 @@ npm run dev:502
 # Then use DevTools → Network → Offline to test SW fallback
 ```
 
-### Installing Chrome Extension
+### Installing Snapper Extension
 
-1. Open `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `extension/` folder
+1. Open Chrome Web Store: https://chromewebstore.google.com/detail/snapper-aw-snap-tab-reloa/jehgbfogcmbekbbcadldojojckehlkbi
+2. Click "Add to Chrome"
+3. Extension auto-monitors all tabs for crashes
 
 ---
 
@@ -368,7 +370,7 @@ ps aux | grep chromium
 
 - **Offline-first:** Works without network after initial sync
 - **Service Worker:** Cached app shell survives Cloudflare outages
-- **Extension:** Auto-recovers from browser crashes
+- **Snapper:** Auto-recovers from browser crashes (external extension)
 - **No partial states:** Only swap complete downloads
 
 ---
@@ -383,11 +385,12 @@ ps aux | grep chromium
 - Cache busting with `BUILD_TIME` on each build
 - Falls back to cached `/` when server returns 502/503
 
-### Chrome Extension Simplified
+### Switched to Snapper Extension
 
-- Removed HTTP error detection (now handled by Service Worker)
-- Only detects browser crashes ("Aw, Snap!", Error 5/6)
-- Auto-reload with n+1 second backoff
+- Removed custom `extension/` folder
+- Now using external "Snapper" extension from Chrome Web Store
+- More robust crash detection via polling + script execution
+- Maintained by bizplay, battle-tested with 287+ users
 
 ### Network Error Handling
 
@@ -409,7 +412,7 @@ ps aux | grep chromium
 **Cause:** Out of memory after weeks of operation.
 
 **Mitigation:** 
-- Chrome Extension detects and auto-reloads
+- Snapper extension detects and auto-reloads
 - 3 AM auto-reload helps
 - Consider weekly Chromium restart via systemd
 
