@@ -111,7 +111,10 @@ export default function LoginPage() {
       </div>
 
       {/* Shared width container so layout matches LocationSelectionView */}
-      <div className="w-full max-w-3xl mx-auto px-6 relative z-10">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-3xl mx-auto px-6 relative z-10"
+      >
         {/* Label */}
         <div className="text-[10px] sm:text-[11px] text-gray-400 uppercase tracking-[.14em] mb-3 text-center">
           PIN-CODE EINGEBEN
@@ -144,13 +147,12 @@ export default function LoginPage() {
         {/* Submit Button */}
         <button
           type="submit"
-          onClick={(e) => handleSubmit(e as unknown as React.FormEvent)}
           disabled={isLoading || !pin}
           className="w-full bg-gradient-to-b from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 disabled:from-neutral-800 disabled:to-neutral-900 cursor-pointer active:cursor-pointer disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-all duration-300 shadow-xl disabled:shadow-none text-xl disabled:text-gray-500"
         >
           {isLoading ? "Wird überprüft..." : "Anmelden"}
         </button>
-      </div>
+      </form>
     </div>
   );
 }

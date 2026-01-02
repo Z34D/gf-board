@@ -1,27 +1,39 @@
 /**
- * Generiert ein Bash-Script für Raspberry Pi 5 (Bookworm/Wayland),
+ * Generiert ein Bash-Script für Raspberry Pi 4/5 (Bookworm/Wayland),
  * um WLAN, Auto-Login und Kiosk-Modus einzurichten.
  * PASTE-FREUNDLICH: Kann direkt in die Console kopiert werden!
  *
  * Setup-Schritte:
  * 1. WLAN konfigurieren (NetworkManager)
+ * 1b. USB-WLAN bevorzugen (deaktiviert onboard wlan0 wenn wlan1 vorhanden)
  * 2. Auto-Login aktivieren (raspi-config)
  * 3. Tastatur auf Deutsch setzen
  * 4. Auflösung auf 1080p fixieren
  * 5. Kiosk-Autostart (NUR labwc user autostart - EINE Methode!)
  * 6. Bildschirmschoner deaktivieren (raspi-config)
  * 7. Automatische Updates deaktivieren (wichtig für Kiosk-Stabilität!)
+ * 8. Snapper Extension installieren (Crash-Recovery)
+ *
+ * WLAN-Setup:
+ * - Wenn wlan1 (USB-Stick) vorhanden: Onboard WLAN wird deaktiviert
+ * - Pi nutzt dann nur noch USB-WLAN (bessere Reichweite/Stabilität)
  *
  * Autostart-Methode:
  * - NUR ~/.config/labwc/autostart (KEINE parallelen Methoden mehr!)
  * - Direkt in der Datei, kein separates Script
  *
- * Chromium Flags (KORRIGIERT):
+ * Chromium Flags:
+ * - --kiosk (Echter Kiosk-Modus, kein Escape möglich)
  * - --user-data-dir=$HOME/.chromium-kiosk (separates Profil, verhindert Keyring)
  * - --password-store=basic (KEIN Keyring-Popup!)
- * - --start-maximized --start-fullscreen (F11 funktioniert!)
+ * - --disable-dev-shm-usage + --memory-pressure-off (Memory-Optimierung für Pi)
  * - --disable-restore-session-state (KEINE Wiederherstellen-Bubble!)
  * - --ozone-platform=wayland (Wayland-Support)
+ *
+ * Kiosk verlassen:
+ * - Strg+Alt+F3 → Terminal (TTY3)
+ * - pkill chromium → Chromium beenden
+ * - Strg+Alt+F7 → Zurück zum Desktop
  *
  * @param ssid - Der Name des WLAN-Netzwerks (Optional: Leer lassen zum Überspringen)
  * @param password - Das WLAN-Passwort (Optional: Leer lassen zum Überspringen)
@@ -29,14 +41,18 @@
  * @returns String containing the complete bash script
  */
 
-export function generatePiSetupScript(ssid: string, password: string, url: string): string {
-	// Wir escapen einfache Anführungszeichen für Bash, um Injection zu vermeiden
-	const safeSsid = ssid ? ssid.replace(/'/g, "'\\''") : "";
-	const safePass = password ? password.replace(/'/g, "'\\''") : "";
-	const safeUrl = url.replace(/'/g, "'\\''");
+export function generatePiSetupScript(
+  ssid: string,
+  password: string,
+  url: string,
+): string {
+  // Wir escapen einfache Anführungszeichen für Bash, um Injection zu vermeiden
+  const safeSsid = ssid ? ssid.replace(/'/g, "'\\''") : "";
+  const safePass = password ? password.replace(/'/g, "'\\''") : "";
+  const safeUrl = url.replace(/'/g, "'\\''");
 
-	return `# ================================================
-# Raspberry Pi 5 Kiosk Setup (Wayland)
+  return `# ================================================
+# Raspberry Pi 4&5 Kiosk Setup (Wayland)
 # ================================================
 # ANLEITUNG: Einfach alles kopieren und in die Pi-Console pasten!
 
@@ -54,7 +70,7 @@ NC='\\033[0m'
 
 echo ""
 echo "================================================"
-echo "   Raspberry Pi 5 Kiosk Setup (Wayland)"
+echo "   Raspberry Pi 4&5 Kiosk Setup (Wayland)"
 echo "================================================"
 echo ""
 
@@ -63,9 +79,7 @@ if [ -n "$WIFI_SSID" ] && [ -n "$WIFI_PASS" ]; then
 	echo -n "Konfiguriere WLAN ('$WIFI_SSID')... "
 
 	# Lösche existierende Verbindung
-	if sudo nmcli connection show "$WIFI_SSID" >/dev/null 2>&1; then
-		sudo nmcli connection delete "$WIFI_SSID" >/dev/null 2>&1
-	fi
+	sudo nmcli connection delete "$WIFI_SSID" >/dev/null 2>&1
 
 	# Neue Verbindung anlegen
 	sudo nmcli con add type wifi ifname wlan0 con-name "$WIFI_SSID" ssid "$WIFI_SSID" >/dev/null 2>&1
@@ -82,6 +96,22 @@ if [ -n "$WIFI_SSID" ] && [ -n "$WIFI_PASS" ]; then
 else
 	echo -e "WLAN Konfiguration... \${YELLOW}[ÜBERSPRUNGEN]\${NC}"
 	WIFI_STATUS="SKIPPED"
+fi
+
+# 1b. USB-WLAN BEVORZUGEN (wlan1 statt onboard wlan0)
+if ip link show wlan1 >/dev/null 2>&1; then
+	echo -n "USB-WLAN gefunden, deaktiviere onboard WLAN... "
+	CONFIG_FILE="/boot/firmware/config.txt"
+	if ! grep -q "dtoverlay=disable-wifi" "$CONFIG_FILE" 2>/dev/null; then
+		echo "dtoverlay=disable-wifi" | sudo tee -a "$CONFIG_FILE" >/dev/null
+		echo -e "\${GREEN}[OK - wlan1 wird nach Neustart verwendet]\${NC}"
+		WLAN1_STATUS="OK"
+	else
+		echo -e "\${GREEN}[Bereits konfiguriert]\${NC}"
+		WLAN1_STATUS="OK"
+	fi
+else
+	WLAN1_STATUS="SKIPPED"
 fi
 
 # 2. AUTO-LOGIN AKTIVIEREN
@@ -149,8 +179,9 @@ mkdir -p "$LABWC_DIR"
 # Erstelle autostart Datei - NUR EINE METHODE!
 # WICHTIGE FLAGS:
 # - --user-data-dir: Separates Profil (verhindert Keyring-Popup)
+# - --kiosk: Echter Kiosk-Modus (Fullscreen, kein Escape)
 # - --password-store=basic: Kein Keyring!
-# - --start-fullscreen: F11 funktioniert (nicht --kiosk!)
+# - --disable-dev-shm-usage + --memory-pressure-off: Memory-Optimierung für Pi
 # - --disable-restore-session-state: Keine Wiederherstellen-Bubble!
 # PRE-START CLEANUP:
 # - Setzt "exit_type" auf "Normal" und "exited_cleanly" auf true
@@ -158,6 +189,9 @@ mkdir -p "$LABWC_DIR"
 cat > "$LABWC_DIR/autostart" << 'LABWC_EOF'
 #!/bin/sh
 # GF-Board Kiosk Autostart
+
+# Warte bis Desktop vollständig geladen ist
+sleep 10
 
 # CLEANUP: Chromium Crash-Flags zurücksetzen (verhindert Restore-Bubble)
 PREFS="\$HOME/.chromium-kiosk/Default/Preferences"
@@ -168,7 +202,7 @@ fi
 
 # Starte Chromium mit Anti-Restore-Flags
 LABWC_EOF
-echo "$CHROMIUM_CMD --user-data-dir=\$HOME/.chromium-kiosk --password-store=basic --use-mock-keychain --start-maximized --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --disable-session-crashed-bubble --disable-restore-session-state --disable-background-mode --disable-backgrounding-occluded-windows --disable-sync --ozone-platform=wayland --enable-features=OverlayScrollbar --disable-features=Translate '$TARGET_URL' &" >> "$LABWC_DIR/autostart"
+echo "$CHROMIUM_CMD --user-data-dir=\$HOME/.chromium-kiosk --kiosk --ozone-platform=wayland --disable-dev-shm-usage --memory-pressure-off --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-component-update --disable-sync --disable-domain-reliability --noerrdialogs --disable-infobars --disable-hang-monitor --disable-prompt-on-repost --disable-session-crashed-bubble --disable-restore-session-state --no-first-run --disable-client-side-phishing-detection --disable-default-apps --password-store=basic --use-mock-keychain --enable-features=OverlayScrollbar --disable-features=Translate,TranslateUI '$TARGET_URL' &" >> "$LABWC_DIR/autostart"
 chmod +x "$LABWC_DIR/autostart"
 
 # Verifiziere
@@ -216,6 +250,10 @@ else
 	echo -e "WLAN Profil:         \${RED}✗ FEHLGESCHLAGEN\${NC}"
 fi
 
+if [ "$WLAN1_STATUS" == "OK" ]; then
+	echo -e "USB-WLAN (wlan1):    \${GREEN}✓ AKTIVIERT (onboard deaktiviert)\${NC}"
+fi
+
 if [ "$AUTOLOGIN_STATUS" == "OK" ]; then
 	echo -e "Auto-Login:          \${GREEN}✓ AKTIVIERT\${NC}"
 else
@@ -258,8 +296,12 @@ echo "✓ Setup abgeschlossen!"
 echo ""
 echo "WICHTIG:"
 echo "  • Chromium startet automatisch nach Neustart"
-echo "  • F11 drücken = Kiosk-Modus verlassen"
-echo "  • F11 nochmal = Zurück in Fullscreen"
+echo "  • Kiosk-Modus: Kein Escape mit F11 möglich!"
+echo ""
+echo "KIOSK VERLASSEN:"
+echo "  1. Strg+Alt+F3  → Terminal öffnen"
+echo "  2. pkill chromium"
+echo "  3. Strg+Alt+F7  → Zurück zum Desktop"
 echo ""
 echo "Falls Chromium NICHT startet:"
 echo "  cat ~/.config/labwc/autostart"
@@ -267,6 +309,16 @@ echo ""
 echo "================================================"
 echo ""
 
+# Snapper Extension installieren
+echo "Öffne Chromium zum Installieren der Snapper Extension..."
+echo "(Crash-Recovery für Kiosk-Modus)"
+echo ""
+echo "→ Klicke auf 'Hinzufügen' um die Extension zu installieren"
+echo "→ Schließe dann Chromium (Strg+W oder X)"
+echo ""
+$CHROMIUM_CMD --user-data-dir=$HOME/.chromium-kiosk --ozone-platform=wayland "https://chromewebstore.google.com/detail/snapper-aw-snap-tab-reloa/jehgbfogcmbekbbcadldojojckehlkbi"
+
+echo ""
 read -p "Setup abgeschlossen. Jetzt neustarten? (y/n): " confirm
 if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
 	echo "Neustart wird initiiert..."

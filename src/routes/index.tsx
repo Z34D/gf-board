@@ -9,24 +9,23 @@ export const Route = createFileRoute("/")({
   component: KioskPage,
   beforeLoad: async () => {
     // Check authentication
+    let authResponse: Response | null = null;
     try {
-      const response = await fetch("/api/auth/check");
-      if (!response.ok) {
-        throw redirect({ to: "/login" });
-      }
-    } catch (error) {
-      // If redirect was thrown, rethrow it
-      if (error && typeof error === "object" && "href" in error) {
-        throw error;
-      }
-      // Network error - check if we have saved PIN (offline mode)
+      authResponse = await fetch("/api/auth/check");
+    } catch {
+      // Network error (fetch failed completely) - check if we have saved PIN (offline mode)
       const savedPin = localStorage.getItem("gf-kiosk-pin");
       if (savedPin) {
-        // We have a saved PIN, allow offline access
         console.log("🔌 Offline mode: using saved credentials");
         return;
       }
       // No saved PIN, must login
+      throw redirect({ to: "/login" });
+    }
+
+    // Got a response - check if authenticated
+    if (!authResponse.ok) {
+      // 401/403 = not authenticated, redirect to login
       throw redirect({ to: "/login" });
     }
   },

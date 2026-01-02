@@ -6,12 +6,20 @@ export const Route = createFileRoute("/install")({
   component: InstallPage,
 });
 
+const CHECK_EXTENSIONS_CMD =
+  "chromium --user-data-dir=$HOME/.chromium-kiosk chrome://extensions";
+
+const ENABLE_ONBOARD_WIFI_CMD =
+  "sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt && echo 'Onboard WLAN aktiviert. Neustart erforderlich.'";
+
 function InstallPage() {
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [url, setUrl] = useState("https://gf-kiosk.brandwork.tech/");
   const [generatedScript, setGeneratedScript] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
+  const [checkCopySuccess, setCheckCopySuccess] = useState(false);
+  const [wifiCopySuccess, setWifiCopySuccess] = useState(false);
 
   const handleGenerate = () => {
     if (!url) {
@@ -35,7 +43,7 @@ function InstallPage() {
   };
 
   return (
-    <div className="w-full h-screen bg-black text-white flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="w-full min-h-screen bg-black text-white flex flex-col items-center py-12 relative overflow-auto">
       {/* Background Grid Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div
@@ -207,12 +215,42 @@ function InstallPage() {
           </div>
         )}
 
-        {/* Snapper Extension Link */}
-        <div className="bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 p-6 rounded-lg w-full mt-6 shadow-[0_12px_40px_rgba(0,0,0,.4)]">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
+        {/* Quick Actions Grid */}
+        <div className="grid grid-cols-3 gap-4 mt-6">
+          {/* Snapper Extension */}
+          <a
+            href="https://chromewebstore.google.com/detail/snapper-aw-snap-tab-reloa/jehgbfogcmbekbbcadldojojckehlkbi"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center gap-2 p-4 bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 rounded-lg hover:border-blue-500/50 transition-colors"
+          >
+            <div className="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
               <svg
                 className="w-5 h-5 text-blue-400"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 6.848A5.454 5.454 0 0 1 12 6.545h10.691A12 12 0 0 0 12 0zM1.931 5.47A11.943 11.943 0 0 0 0 12c0 6.012 4.42 10.991 10.189 11.864l3.953-6.847a5.45 5.45 0 0 1-6.865-2.29zm13.342 2.166a5.446 5.446 0 0 1 1.45 7.09l.002.001h-.002l-3.953 6.848c.389.035.782.054 1.18.054 6.627 0 12-5.373 12-12 0-1.006-.124-1.983-.357-2.915zM12 16.364a4.364 4.364 0 1 1 0-8.728 4.364 4.364 0 0 1 0 8.728z" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium text-white">
+              Snapper Extension
+            </span>
+            <span className="text-[10px] text-gray-500">Crash-Recovery</span>
+          </a>
+
+          {/* Check Kiosk Profile */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(CHECK_EXTENSIONS_CMD);
+              setCheckCopySuccess(true);
+              setTimeout(() => setCheckCopySuccess(false), 3000);
+            }}
+            className="flex flex-col items-center gap-2 p-4 bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 rounded-lg hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center">
+              <svg
+                className="w-5 h-5 text-emerald-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -221,35 +259,47 @@ function InstallPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
             </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-white mb-1">
-                Snapper Extension
-              </h3>
-              <p className="text-xs text-gray-400 mb-3">
-                Installiere die Snapper Chrome Extension für automatisches
-                Neuladen bei Browser-Crashes.
-              </p>
-              <a
-                href="https://chromewebstore.google.com/detail/snapper-aw-snap-tab-reloa/jehgbfogcmbekbbcadldojojckehlkbi"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
+            <span className="text-xs font-medium text-white">
+              {checkCopySuccess ? "Kopiert!" : "Kiosk-Profil prüfen"}
+            </span>
+            <span className="text-[10px] text-gray-500">
+              Extensions checken
+            </span>
+          </button>
+
+          {/* Activate Pi WLAN */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(ENABLE_ONBOARD_WIFI_CMD);
+              setWifiCopySuccess(true);
+              setTimeout(() => setWifiCopySuccess(false), 3000);
+            }}
+            className="flex flex-col items-center gap-2 p-4 bg-gradient-to-b from-neutral-900/95 to-neutral-900/70 border border-white/10 rounded-lg hover:border-yellow-500/50 transition-colors"
+          >
+            <div className="w-10 h-10 bg-yellow-600/20 rounded-lg flex items-center justify-center">
+              <svg
+                className="w-5 h-5 text-yellow-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
-                <svg
-                  className="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 6.848A5.454 5.454 0 0 1 12 6.545h10.691A12 12 0 0 0 12 0zM1.931 5.47A11.943 11.943 0 0 0 0 12c0 6.012 4.42 10.991 10.189 11.864l3.953-6.847a5.45 5.45 0 0 1-6.865-2.29zm13.342 2.166a5.446 5.446 0 0 1 1.45 7.09l.002.001h-.002l-3.953 6.848c.389.035.782.054 1.18.054 6.627 0 12-5.373 12-12 0-1.006-.124-1.983-.357-2.915zM12 16.364a4.364 4.364 0 1 1 0-8.728 4.364 4.364 0 0 1 0 8.728z" />
-                </svg>
-                Chrome Web Store
-              </a>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+                />
+              </svg>
             </div>
-          </div>
+            <span className="text-xs font-medium text-white">
+              {wifiCopySuccess ? "Kopiert!" : "Onboard WLAN"}
+            </span>
+            <span className="text-[10px] text-gray-500">WLAN aktivieren</span>
+          </button>
         </div>
       </div>
     </div>
