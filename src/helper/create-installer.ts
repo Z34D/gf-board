@@ -12,7 +12,8 @@
  * 5. Kiosk-Autostart (NUR labwc user autostart - EINE Methode!)
  * 6. Bildschirmschoner deaktivieren (raspi-config)
  * 7. Automatische Updates deaktivieren (wichtig für Kiosk-Stabilität!)
- * 8. Snapper Extension installieren (Crash-Recovery)
+ * 8. Chromium Übersetzung deaktivieren (Policy)
+ * 9. Snapper Extension installieren (Crash-Recovery)
  *
  * WLAN-Setup:
  * - Wenn wlan1 (USB-Stick) vorhanden: Onboard WLAN wird deaktiviert
@@ -237,6 +238,13 @@ sudo systemctl disable unattended-upgrades >/dev/null 2>&1
 echo -e "\${GREEN}[OK]\${NC}"
 UPDATES_STATUS="OK"
 
+# 8. CHROMIUM ÜBERSETZUNG DEAKTIVIEREN (Policy)
+echo -n "Deaktiviere Chromium Übersetzung... "
+sudo mkdir -p /etc/chromium/policies/managed
+echo '{ "TranslateEnabled": false }' | sudo tee /etc/chromium/policies/managed/no-translate.json >/dev/null
+echo -e "\${GREEN}[OK]\${NC}"
+TRANSLATE_STATUS="OK"
+
 echo ""
 echo "================================================"
 echo "                ZUSAMMENFASSUNG"
@@ -288,6 +296,10 @@ if [ "$UPDATES_STATUS" == "OK" ]; then
 	echo -e "Auto-Updates:        \${GREEN}✓ DEAKTIVIERT\${NC}"
 else
 	echo -e "Auto-Updates:        \${YELLOW}⚠ WARNUNG\${NC}"
+fi
+
+if [ "$TRANSLATE_STATUS" == "OK" ]; then
+	echo -e "Übersetzung:         \${GREEN}✓ DEAKTIVIERT\${NC}"
 fi
 
 echo "================================================"

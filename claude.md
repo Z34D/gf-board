@@ -11,7 +11,7 @@
 | **State** | Zustand |
 | **Storage** | OPFS (offline), Google Drive (source) |
 | **Styling** | Tailwind CSS v4 |
-| **Target** | Raspberry Pi 4 + Chromium (24/7 kiosk) |
+| **Target** | Raspberry Pi 4/5 + Chromium (24/7 kiosk) |
 
 ## Commands
 
@@ -411,7 +411,9 @@ chromium-browser --kiosk --user-data-dir=$HOME/.chromium-kiosk --ozone-platform=
 | Modus | Flag | Cursor | Escape |
 |-------|------|--------|--------|
 | Fullscreen | `--start-fullscreen` | Sichtbar | F11 |
-| Kiosk | `--kiosk` | Versteckt | Nicht möglich (SSH/VNC nötig) |
+| Kiosk | `--kiosk` | Versteckt | Strg+Alt+F3 → pkill chromium → Strg+Alt+F7 |
+
+**Wichtig:** Das Install-Script verwendet `--kiosk` (echter Kiosk-Modus). Der labwc autostart wartet 10 Sekunden vor dem Start damit der Desktop vollständig geladen ist.
 
 | Flag-Gruppe | Zweck |
 |-------------|-------|
@@ -469,6 +471,60 @@ chromium-browser --kiosk --user-data-dir=$HOME/.chromium-kiosk --ozone-platform=
 
 - `npm run dev:502` - Simulate Cloudflare 502 errors
 - Test Service Worker behavior before production
+
+---
+
+## Install Script (`src/helper/create-installer.ts`)
+
+Generiert ein Bash-Script für Raspberry Pi 4/5 Setup. Zugriff via `/install` Route.
+
+### Setup-Schritte
+
+1. WLAN konfigurieren (NetworkManager)
+2. USB-WLAN bevorzugen (deaktiviert onboard wlan0 wenn wlan1 vorhanden)
+3. Auto-Login aktivieren
+4. Tastatur auf Deutsch setzen
+5. Auflösung auf 1080p fixieren
+6. Kiosk-Autostart (labwc)
+7. Bildschirmschoner deaktivieren
+8. Automatische Updates deaktivieren
+9. Chromium Übersetzung deaktivieren (Policy)
+10. Snapper Extension installieren
+
+### USB-WLAN
+
+Wenn ein USB-WLAN-Stick (`wlan1`) erkannt wird:
+- Onboard WLAN wird deaktiviert via `dtoverlay=disable-wifi` in `/boot/firmware/config.txt`
+- Pi nutzt nur noch USB-WLAN (bessere Reichweite/Stabilität)
+
+**Onboard WLAN wieder aktivieren:**
+```bash
+sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt
+sudo reboot
+```
+
+### Chromium Übersetzung deaktivieren
+
+Policy-Datei unter `/etc/chromium/policies/managed/no-translate.json`:
+```json
+{ "TranslateEnabled": false }
+```
+
+### Kiosk verlassen
+
+1. `Strg+Alt+F3` → Terminal öffnen
+2. `pkill chromium` → Chromium beenden
+3. `Strg+Alt+F7` → Zurück zum Desktop
+
+### Kiosk-Profil prüfen (Extensions)
+
+```bash
+chromium --user-data-dir=$HOME/.chromium-kiosk chrome://extensions
+```
+
+### Snapper Extension im Kiosk-Profil installieren
+
+Das Install-Script öffnet automatisch die Chrome Web Store Seite mit dem Kiosk-Profil. Nur auf "Hinzufügen" klicken.
 
 ---
 
