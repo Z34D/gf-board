@@ -207,8 +207,12 @@ export const useAppStore = create<AppState>()(
           });
 
           if (result.success) {
-            // Reload media files after successful sync
-            await get().loadLocalMedia();
+            // Only reload if something actually changed
+            const hasChanges =
+              result.downloaded > 0 || result.updated > 0 || result.deleted > 0;
+            if (hasChanges) {
+              await get().loadLocalMedia();
+            }
 
             set((state) => ({
               syncStatus: {

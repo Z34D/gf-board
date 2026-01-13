@@ -106,7 +106,7 @@ const SlideshowView: React.FC = () => {
   // No slides yet - show GetFit logo (non-blocking, syncing in background)
   if (slides.length === 0) {
     return (
-      <div className="w-full h-screen bg-black overflow-hidden flex items-center justify-center">
+      <div className="hide-cursor w-full h-screen bg-black overflow-hidden flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl font-bold tracking-tight italic">
             <span className="text-white">GET</span>
@@ -124,11 +124,11 @@ const SlideshowView: React.FC = () => {
 
   return (
     <div
-      className="w-full h-screen bg-black overflow-hidden"
+      className="hide-cursor w-full h-screen bg-black overflow-hidden"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="hide-cursor relative w-full h-full">
+      <div className="relative w-full h-full">
         {/* Render all slides */}
         {slides.map((slide, index) => (
           <Slide

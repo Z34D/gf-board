@@ -136,6 +136,9 @@ export const useSlideshowMachine = (slides: Slide[]) => {
       video.muted = true;
       video.volume = 0;
 
+      // Loop video if it's the only slide
+      video.loop = slides.length === 1;
+
       // Function to play video when ready
       const playVideo = () => {
         video
@@ -147,16 +150,17 @@ export const useSlideshowMachine = (slides: Slide[]) => {
             // console.warn(`   ⚠️ Play failed:`, err.message)
           });
 
-        // Set timer based on actual duration
-        const actualDuration =
-          video.duration || currentSlide.videoDuration || 10;
-        // console.log(`   🎥 Video: ${actualDuration}s`)
-        const duration = Math.ceil(actualDuration * 1000);
-        // console.log(`   ⏱️ Auto-advance in: ${duration}ms`)
+        // Only set auto-advance timer if there are multiple slides
+        // Single video will loop instead
+        if (slides.length > 1) {
+          const actualDuration =
+            video.duration || currentSlide.videoDuration || 10;
+          const duration = Math.ceil(actualDuration * 1000);
 
-        autoPlayTimerRef.current = setTimeout(() => {
-          goToNextRef.current();
-        }, duration);
+          autoPlayTimerRef.current = setTimeout(() => {
+            goToNextRef.current();
+          }, duration);
+        }
       };
 
       // Wait for video to be ready (readyState >= 2 means current frame is available)
