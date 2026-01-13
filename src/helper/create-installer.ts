@@ -82,8 +82,8 @@ if [ -n "$WIFI_SSID" ] && [ -n "$WIFI_PASS" ]; then
 	# Lösche existierende Verbindung
 	sudo nmcli connection delete "$WIFI_SSID" >/dev/null 2>&1
 
-	# Neue Verbindung anlegen
-	sudo nmcli con add type wifi ifname wlan0 con-name "$WIFI_SSID" ssid "$WIFI_SSID" >/dev/null 2>&1
+	# Neue Verbindung anlegen - OHNE ifname, damit es auf jedem WLAN-Interface funktioniert
+	sudo nmcli con add type wifi con-name "$WIFI_SSID" ssid "$WIFI_SSID" >/dev/null 2>&1
 	sudo nmcli con modify "$WIFI_SSID" wifi-sec.key-mgmt wpa-psk >/dev/null 2>&1
 	sudo nmcli con modify "$WIFI_SSID" wifi-sec.psk "$WIFI_PASS" >/dev/null 2>&1
 
