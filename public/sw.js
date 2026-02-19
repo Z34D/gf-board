@@ -34,6 +34,20 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Check if request is for a static asset (JS, CSS, images)
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith("/assets/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".woff2") ||
+    url.pathname.endsWith(".woff") ||
+    url.pathname.endsWith(".png") ||
+    url.pathname.endsWith(".svg") ||
+    url.pathname.endsWith(".ico")
+  );
+}
+
 // Fetch: cache first for app files, network for API
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
@@ -48,7 +62,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache first strategy - instant offline response
+  // Static assets: Network first with timeout + cache fallback
+  // This ensures fresh assets after deploy, but works offline or on slow networks
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      Promise.race([
+        // Try network with 3 second timeout
+        fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        }),
+        // Timeout after 3 seconds
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 3000),
+        ),
+      ]).catch(() => {
+        // Network failed or timeout - try cache
+        return caches.match(event.request);
+      }),
+    );
+    return;
+  }
+
+  // HTML/navigation: Cache first with background update
   event.respondWith(
     caches
       .match(event.request)

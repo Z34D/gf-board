@@ -4,7 +4,10 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   background: #000;
   color: #fff;
   overflow: hidden; /* Prevent scrolling on kiosk */
@@ -27,7 +30,8 @@ body {
 }
 
 /* Allow text selection in input fields */
-input, textarea {
+input,
+textarea {
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
@@ -39,4 +43,3 @@ input, textarea {
 .hide-cursor * {
   cursor: none !important;
 }
-

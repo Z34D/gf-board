@@ -491,6 +491,10 @@ Generiert ein Bash-Script für Raspberry Pi 4/5 Setup. Zugriff via `/install` Ro
 9. Chromium Übersetzung deaktivieren (Policy)
 10. Snapper Extension installieren
 
+### WLAN-Verbindung
+
+Die WLAN-Verbindung wird **ohne festes Interface** erstellt (`nmcli con add type wifi` ohne `ifname`). Dadurch funktioniert das gespeicherte WLAN-Profil automatisch mit `wlan0` (onboard) oder `wlan1` (USB-Stick).
+
 ### USB-WLAN
 
 Wenn ein USB-WLAN-Stick (`wlan1`) erkannt wird:
