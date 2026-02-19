@@ -7,7 +7,7 @@
     "dev": "bun --watch dev-server/dev.ts",
     "dev:error": "RANDOM_ERROR_RATE=30 bun --watch dev-server/dev.ts",
     "dev:502": "bun --watch dev-server/dev.ts -- --502",
-    "build": "tsc -b && vite build && node -e \"const fs=require('fs');const f='dist/client/sw.js';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('__BUILD_TIME__',Date.now()))\"",
+    "build": "tsc -b && vite build && node -e \"const fs=require('fs');const path=require('path');const f='dist/client/sw.js';const assetsDir='dist/client/assets';const assets=fs.existsSync(assetsDir)?fs.readdirSync(assetsDir).map(f=>'/assets/'+f):[];let sw=fs.readFileSync(f,'utf8');sw=sw.replace('__BUILD_TIME__',Date.now());sw=sw.replace('__BUILD_ASSETS__',JSON.stringify(assets));fs.writeFileSync(f,sw)\"",
     "lint": "eslint .",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy --keep-vars",
