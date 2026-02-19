@@ -3,9 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-
-// Build timestamp for cache busting
-const BUILD_TIME = Date.now().toString();
+import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -18,6 +16,15 @@ export default defineConfig({
     react(),
     tailwindcss(),
     cloudflare(),
+    VitePWA({
+      registerType: "autoUpdate",
+      manifest: false,
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//],
+      },
+    }),
   ],
   server: {
     proxy: {
@@ -27,8 +34,5 @@ export default defineConfig({
         secure: false,
       },
     },
-  },
-  define: {
-    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
   },
 });

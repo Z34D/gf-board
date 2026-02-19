@@ -216,7 +216,7 @@ app.get("/api/auth/check", async (c) => {
     }
 
     // Verify JWT
-    const jwtMiddleware = jwt({ secret: jwtSecret, cookie: "kiosk_session" });
+    const jwtMiddleware = jwt({ secret: jwtSecret, cookie: "kiosk_session", alg: "HS256" });
     await jwtMiddleware(c, async () => {});
 
     return c.json({ authenticated: true });
@@ -256,7 +256,7 @@ async function authMiddleware(c: Context<Env>, next: Next) {
       return c.json({ error: "Server configuration error" }, 500);
     }
 
-    const jwtMiddleware = jwt({ secret: jwtSecret, cookie: "kiosk_session" });
+    const jwtMiddleware = jwt({ secret: jwtSecret, cookie: "kiosk_session", alg: "HS256" });
     await jwtMiddleware(c, next);
   } catch {
     return c.json({ error: "Invalid token" }, 401);

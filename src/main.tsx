@@ -6,10 +6,7 @@ import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({ routeTree });
 
-// Register Service Worker for offline support
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
+// SW registration handled by vite-plugin-pwa (autoUpdate mode)
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
