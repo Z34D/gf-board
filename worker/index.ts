@@ -520,37 +520,13 @@ app.get("/api/test-drive", async (c) => {
 });
 
 // --- Static Assets ---
+// Cache-Control headers are set via public/_headers file (Cloudflare static assets
+// bypass the Worker, so headers must be configured declaratively).
 
-/** Serve static assets from ASSETS binding with Cache-Control headers */
+/** Serve static assets from ASSETS binding (fallback for non-matched routes) */
 app.get("*", async (c) => {
   try {
-    const response = await c.env.ASSETS.fetch(c.req.raw);
-    const url = new URL(c.req.url);
-
-    // Clone response to add headers
-    const headers = new Headers(response.headers);
-
-    if (url.pathname.startsWith("/assets/")) {
-      // Hashed filenames (index-CuBaN70S.js) → immutable, cache forever
-      headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    } else if (url.pathname.endsWith(".js")) {
-      // sw.js, registerSW.js, workbox-*.js → must revalidate (SW-Update-Mechanismus)
-      headers.set("Cache-Control", "public, max-age=0, must-revalidate");
-    } else {
-      // index.html → 7 Tage frisch, 1 Jahr stale-while-revalidate
-      // Cold Boot: Chromium Disk Cache servt ohne Netzwerk und ohne SW
-      // stale-while-revalidate: Nach 7d wird stale serviert + im Hintergrund aktualisiert
-      headers.set(
-        "Cache-Control",
-        "public, max-age=604800, stale-while-revalidate=31536000",
-      );
-    }
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    return await c.env.ASSETS.fetch(c.req.raw);
   } catch {
     return new Response("Not found", { status: 404 });
   }
