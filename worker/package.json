@@ -1,0 +1,16 @@
+{
+  "name": "gf-kiosk-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy --keep-vars",
+    "typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.10.4"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "wrangler": "^4.46.0"
+  }
+}

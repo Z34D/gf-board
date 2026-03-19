@@ -1,31 +1,26 @@
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
 node_modules
 dist
-dist-ssr
-*.local
+bun.lock
 
-# Editor directories and files
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.sw?
 
-# wrangler files
+# Cloudflare Worker
 .wrangler
-.dev.vars*
+.dev.vars
 !.dev.vars.example
-.env*
-!.env.example
+
+# Secrets
+.env
+
+# Kiosk runtime state (local to each Pi)
+media/
+config.json
