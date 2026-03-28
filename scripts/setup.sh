@@ -1,5 +1,5 @@
 #!/bin/bash
-# GF-Kiosk Setup -- installs Bun, then runs interactive setup
+# GF-Kiosk Setup -- installs Bun, dependencies, then runs interactive setup
 
 # Always work from repo root (parent of scripts/)
 cd "$(dirname "$0")/.."
@@ -25,5 +25,22 @@ else
   echo "[OK] Bun installiert: $(bun --version)"
 fi
 
-# Run interactive setup (no dependencies needed, pure Bun APIs)
+# Install dependencies (remove stale node_modules on EEXIST link errors)
+echo "[*] Installiere Dependencies..."
+if ! bun install 2>/tmp/bun-install-err.txt; then
+  if grep -q "EEXIST" /tmp/bun-install-err.txt 2>/dev/null; then
+    echo "[!] Link-Fehler erkannt -- bereinige node_modules..."
+    rm -rf node_modules
+    bun install || { echo "[ERR] bun install fehlgeschlagen"; exit 1; }
+  else
+    cat /tmp/bun-install-err.txt >&2
+    echo "[ERR] bun install fehlgeschlagen"
+    exit 1
+  fi
+fi
+rm -f /tmp/bun-install-err.txt
+echo "[OK] Dependencies installiert"
+
+# Run interactive setup
+echo ""
 bun scripts/install.ts
