@@ -1,9 +1,0 @@
-name = "simeon-gf-kiosk"
-main = "./index.ts"
-compatibility_date = "2025-04-09"
-upload_source_maps = true
-
-keep_vars = true
-
-[observability]
-enabled = true

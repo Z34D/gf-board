@@ -164,10 +164,11 @@ async function setupAutostart() {
 async function setupEnv() {
   console.log("\n[*] Kiosk-Konfiguration:");
   const pin = await ask("KIOSK_PIN: ");
+  const workerUrl = await ask("WORKER_URL [https://gf-kiosk.brandwork.tech]: ");
 
   const lines = [
     `KIOSK_PIN=${pin || "0000"}`,
-    `WORKER_URL=https://gf-kiosk.brandwork.tech`,
+    `WORKER_URL=${workerUrl || "https://gf-kiosk.brandwork.tech"}`,
   ];
 
   await Bun.write(`${KIOSK_DIR}/.env`, lines.join("\n") + "\n");

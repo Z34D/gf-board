@@ -9,7 +9,7 @@
 | **Runtime** | Bun 1.3.x |
 | **Frontend** | React 19 + Zustand + Tailwind CSS v4 |
 | **Server** | Bun.serve (native, kein Framework) |
-| **Worker** | Cloudflare Workers + Hono (Google Drive API Proxy) |
+| **Worker** | Separates Repo: `gf-board-worker` (Cloudflare Workers + Hono) |
 | **Target** | Raspberry Pi 4/5 + Chromium Kiosk (24/7) |
 
 ## Commands
@@ -41,12 +41,6 @@ gf-board/
 │   ├── index.ts                 # HTTP Server, Chromium Management, API Routes
 │   ├── sync.ts                  # Media-Sync: Worker API -> lokale Disk
 │   └── scheduler.ts             # Cron-basierter Sync-Scheduler (croner)
-├── worker/                      # Cloudflare Worker (eigenstaendig)
-│   ├── index.ts                 # Hono API: Auth, Drive Proxy, Health
-│   ├── package.json             # hono + wrangler
-│   ├── wrangler.toml            # Deploy-Config
-│   ├── tsconfig.json
-│   └── worker-configuration.d.ts
 ├── scripts/                     # Setup & Autostart
 │   ├── setup.sh                 # Erstinstallation (Bun + Dependencies + Setup)
 │   ├── install.ts               # Interaktives Pi-Setup (WLAN, Autostart, .env)
@@ -79,7 +73,7 @@ Raspberry Pi
 
     ↓ HTTPS (nur fuer Sync)
 
-Cloudflare Worker (worker/index.ts)
+Cloudflare Worker (separates Repo: gf-board-worker)
 ├── POST /api/auth/login (PIN → JWT Cookie)
 ├── GET /api/locations/:location/files (Google Drive Ordner lesen)
 └── ALL /api/drive/* (Google Drive API Proxy, Streaming)
@@ -180,10 +174,12 @@ WORKER_URL=https://gf-kiosk.brandwork.tech
 
 Wird von `scripts/install.ts` erstellt.
 
-## Worker Deploy (separat)
+## Worker Deploy (separates Repo)
+
+Siehe `gf-board-worker` Repo (`../gf-board-worker/`).
 
 ```bash
-cd worker
+cd ../gf-board-worker
 bun install
 bun run deploy    # wrangler deploy --keep-vars
 ```

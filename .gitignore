@@ -13,11 +13,6 @@ bun.lock
 .DS_Store
 *.sw?
 
-# Cloudflare Worker
-.wrangler
-.dev.vars
-!.dev.vars.example
-
 # Secrets
 .env
 
