@@ -89,8 +89,9 @@ async function setupWlan() {
 }
 
 async function preferUsbWlan() {
-  const { stdout } = await shell("ls /sys/class/net/wlan1 2>/dev/null");
-  if (!stdout) return;
+  // Nur deaktivieren wenn wlan1 ein echtes USB-Gerät ist
+  const { stdout } = await shell("readlink -f /sys/class/net/wlan1 2>/dev/null");
+  if (!stdout || !stdout.includes("/usb")) return;
 
   console.log("[*] USB-WLAN (wlan1) erkannt -- deaktiviere onboard WLAN...");
   if (await fileContains(BOOT_CONFIG, "dtoverlay=disable-wifi")) {
