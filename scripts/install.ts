@@ -3,6 +3,7 @@
  * Raspberry Pi Kiosk Setup Script
  *
  * Interactive terminal — prompts for WLAN, PIN etc.
+ * Idempotent: safe to run multiple times.
  * Run: bun run setup
  */
 
@@ -15,29 +16,29 @@ const BOOT_CONFIG = "/boot/firmware/config.txt";
 
 async function ask(question: string): Promise<string> {
   process.stdout.write(question);
-  const reader = Bun.stdin.stream().getReader();
-  const { value } = await reader.read();
-  reader.releaseLock();
-  return value ? new TextDecoder().decode(value).trim() : "";
+  for await (const line of console) {
+    return line.trim();
+  }
+  return "";
 }
 
-async function shell(cmd: string): Promise<string> {
+async function shell(cmd: string): Promise<{ code: number; stdout: string }> {
   const proc = Bun.spawn(["bash", "-c", cmd], {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const out = await new Response(proc.stdout).text();
-  await proc.exited;
-  return out.trim();
+  const stdout = await new Response(proc.stdout).text();
+  const code = await proc.exited;
+  return { code, stdout: stdout.trim() };
 }
 
-async function shellOrFail(cmd: string): Promise<void> {
+async function shellRun(cmd: string): Promise<boolean> {
   const proc = Bun.spawn(["bash", "-c", cmd], {
     stdout: "inherit",
     stderr: "inherit",
   });
   const code = await proc.exited;
-  if (code !== 0) throw new Error(`Command failed (${code}): ${cmd}`);
+  return code === 0;
 }
 
 async function fileContains(path: string, needle: string): Promise<boolean> {
@@ -51,7 +52,7 @@ async function fileContains(path: string, needle: string): Promise<boolean> {
 
 async function appendToFile(path: string, content: string): Promise<void> {
   const escaped = content.replace(/'/g, "'\\''");
-  await shellOrFail(`printf '%b\\n' '${escaped}' | sudo tee -a ${path} > /dev/null`);
+  await shellRun(`printf '%b\\n' '${escaped}' | sudo tee -a ${path} > /dev/null`);
 }
 
 // --- Setup Steps ---
@@ -69,31 +70,44 @@ async function setupWlan() {
 
   const safeSsid = ssid.replace(/'/g, "'\\''");
   const safePassword = password.replace(/'/g, "'\\''");
-  await shellOrFail(
+
+  // Delete existing connection if present (idempotent)
+  await shell(`nmcli con delete '${safeSsid}' 2>/dev/null`);
+
+  if (!await shellRun(
     `nmcli con add type wifi con-name '${safeSsid}' ssid '${safeSsid}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${safePassword}'`,
-  );
-  await shellOrFail(`nmcli con up '${safeSsid}'`);
+  )) {
+    console.log("[ERR] WLAN-Verbindung konnte nicht erstellt werden");
+    return;
+  }
+
+  if (!await shellRun(`nmcli con up '${safeSsid}'`)) {
+    console.log("[ERR] WLAN-Verbindung konnte nicht hergestellt werden");
+    return;
+  }
+
   console.log("[OK] WLAN verbunden");
 }
 
 async function preferUsbWlan() {
-  const hasUsbWlan = await shell("ls /sys/class/net/wlan1 2>/dev/null").then((r) => r.length > 0).catch(() => false);
-  if (!hasUsbWlan) return;
+  const { stdout } = await shell("ls /sys/class/net/wlan1 2>/dev/null");
+  if (!stdout) return;
 
   console.log("[*] USB-WLAN (wlan1) erkannt -- deaktiviere onboard WLAN...");
-  if (!(await fileContains(BOOT_CONFIG, "dtoverlay=disable-wifi"))) {
-    await appendToFile(BOOT_CONFIG, "dtoverlay=disable-wifi");
-    console.log("[OK] Onboard WLAN wird nach Reboot deaktiviert (USB-WLAN uebernimmt)");
-  } else {
+  if (await fileContains(BOOT_CONFIG, "dtoverlay=disable-wifi")) {
     console.log("[i] Onboard WLAN bereits deaktiviert");
+    return;
   }
+
+  await appendToFile(BOOT_CONFIG, "dtoverlay=disable-wifi");
+  console.log("[OK] Onboard WLAN wird nach Reboot deaktiviert (USB-WLAN uebernimmt)");
 }
 
 async function setupAutoLogin() {
   console.log("[*] Aktiviere Auto-Login...");
   const user = process.env.USER || "pi";
-  await shellOrFail("sudo mkdir -p /etc/systemd/system/getty@tty1.service.d");
-  await shellOrFail(
+  await shellRun("sudo mkdir -p /etc/systemd/system/getty@tty1.service.d");
+  await shellRun(
     `printf '[Service]\\nExecStart=\\nExecStart=-/sbin/agetty --autologin ${user} --noclear %%I $TERM\\n' | sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null`,
   );
   console.log("[OK] Auto-Login aktiviert");
@@ -101,8 +115,11 @@ async function setupAutoLogin() {
 
 async function setupKeyboard() {
   console.log("[*] Setze Tastaturlayout auf Deutsch...");
-  await shellOrFail("sudo localectl set-keymap de");
-  console.log("[OK] Tastatur: Deutsch");
+  if (await shellRun("sudo localectl set-keymap de")) {
+    console.log("[OK] Tastatur: Deutsch");
+  } else {
+    console.log("[!] Tastaturlayout konnte nicht gesetzt werden (ueberspringe)");
+  }
 }
 
 async function setupResolution() {
@@ -117,8 +134,8 @@ async function setupResolution() {
 
 async function disableTranslate() {
   console.log("[*] Deaktiviere Chromium-Uebersetzung...");
-  await shellOrFail("sudo mkdir -p /etc/chromium/policies/managed");
-  await shellOrFail(
+  await shellRun("sudo mkdir -p /etc/chromium/policies/managed");
+  await shellRun(
     `echo '{ "TranslateEnabled": false }' | sudo tee /etc/chromium/policies/managed/no-translate.json > /dev/null`,
   );
   console.log("[OK] Chromium-Uebersetzung deaktiviert");
@@ -127,17 +144,20 @@ async function disableTranslate() {
 async function disableScreensaver() {
   console.log("[*] Deaktiviere Screensaver/Blanking...");
   const profile = `${process.env.HOME}/.profile`;
-  if (!(await fileContains(profile, "xset s off"))) {
-    const lines = [
-      "",
-      "# Disable screen blanking for kiosk",
-      "xset s off 2>/dev/null || true",
-      "xset -dpms 2>/dev/null || true",
-      "xset s noblank 2>/dev/null || true",
-    ].join("\n");
-    const existing = await Bun.file(profile).text().catch(() => "");
-    await Bun.write(profile, existing + lines + "\n");
+  if (await fileContains(profile, "xset s off")) {
+    console.log("[i] Screensaver bereits deaktiviert");
+    return;
   }
+
+  const lines = [
+    "",
+    "# Disable screen blanking for kiosk",
+    "xset s off 2>/dev/null || true",
+    "xset -dpms 2>/dev/null || true",
+    "xset s noblank 2>/dev/null || true",
+  ].join("\n");
+  const existing = await Bun.file(profile).text().catch(() => "");
+  await Bun.write(profile, existing + lines + "\n");
   console.log("[OK] Screensaver deaktiviert");
 }
 
@@ -150,13 +170,9 @@ async function disableAutoUpdates() {
 
 async function setupAutostart() {
   console.log("[*] Konfiguriere Kiosk-Autostart...");
-  await shellOrFail(`mkdir -p ${AUTOSTART_DIR}`);
+  await shellRun(`mkdir -p ${AUTOSTART_DIR}`);
 
-  const autostart = [
-    `bash ${KIOSK_DIR}/scripts/autostart.sh &`,
-    "",
-  ].join("\n");
-
+  const autostart = `bash ${KIOSK_DIR}/scripts/autostart.sh &\n`;
   await Bun.write(AUTOSTART_FILE, autostart);
   console.log("[OK] Autostart konfiguriert");
 }
