@@ -33,10 +33,12 @@ fi
 
 # Install dependencies
 echo "[*] Installiere Dependencies..."
-if ! bun install; then
+if ! bun install --ignore-scripts; then
   echo "[ERR] bun install fehlgeschlagen"
   exit 1
 fi
+# Run postinstall for the bun npm package using bun itself (no node needed)
+[ -f node_modules/bun/install.js ] && bun node_modules/bun/install.js 2>/dev/null || true
 echo "[OK] Dependencies installiert"
 
 # Run interactive setup

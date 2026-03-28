@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useAppStore } from "../stores/appStore";
 
 const LocationSelectionView: React.FC = () => {
@@ -7,6 +7,17 @@ const LocationSelectionView: React.FC = () => {
   const setSelectedLocation = useAppStore((s) => s.setSelectedLocation);
   const schedulerConfig = useAppStore((s) => s.schedulerConfig);
   const setSchedulerConfig = useAppStore((s) => s.setSchedulerConfig);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === "q" || e.key === "Q")) {
+        e.preventDefault();
+        fetch("/api/kill-kiosk", { method: "POST" }).catch(() => {});
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const schedulerOptions = [
     { value: "5min", label: "Alle 5 Minuten" },

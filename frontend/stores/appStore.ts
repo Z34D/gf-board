@@ -31,6 +31,7 @@ interface AppState {
   availableLocations: string[];
   mediaFiles: MediaFile[];
   schedulerConfig: SchedulerConfig;
+  initializing: boolean;
 
   fetchStatus: () => Promise<void>;
   loadFiles: () => Promise<void>;
@@ -44,6 +45,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   availableLocations: ["Flieden", "Neuhof", "Gersfeld", "Schlitz", "Eichenzell"],
   mediaFiles: [],
   schedulerConfig: { enabled: true, interval: "daily1am", nextSync: null },
+  initializing: true,
 
   fetchStatus: async () => {
     try {
@@ -55,6 +57,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         schedulerConfig: data.schedulerConfig ?? get().schedulerConfig,
       });
     } catch { /* offline */ }
+    finally { set({ initializing: false }); }
   },
 
   loadFiles: async () => {

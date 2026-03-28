@@ -2,7 +2,7 @@ import { mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 
 const WORKER_URL = process.env.WORKER_URL ?? "https://gf-kiosk.brandwork.tech";
-const KIOSK_PIN = process.env.KIOSK_PIN ?? "1234";
+const KIOSK_PIN = process.env.KIOSK_PIN ?? "0000";
 
 interface DriveFile {
   id: string;

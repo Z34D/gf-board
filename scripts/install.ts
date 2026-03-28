@@ -14,12 +14,11 @@ const BOOT_CONFIG = "/boot/firmware/config.txt";
 
 // --- Helpers ---
 
-async function ask(question: string): Promise<string> {
-  process.stdout.write(question);
-  for await (const line of console) {
-    return line.trim();
-  }
-  return "";
+import { createInterface } from "node:readline";
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+function ask(question: string): Promise<string> {
+  return new Promise(resolve => rl.question(question, answer => resolve(answer.trim())));
 }
 
 async function shell(cmd: string): Promise<{ code: number; stdout: string }> {
@@ -210,14 +209,9 @@ async function main() {
   console.log(`
 === Setup abgeschlossen! ===
 
-Naechste Schritte:
-  1. cd ${KIOSK_DIR}
-  2. bun install
-  3. bun run start  (oder: sudo reboot fuer Autostart-Test)
-
-Kiosk verlassen:
-  Strg+Alt+F3 -> pkill chromium -> Strg+Alt+F7
+Kiosk wird beim naechsten Reboot automatisch gestartet.
+Kiosk verlassen: Alt+Q
 `);
 }
 
-main().catch(console.error);
+main().catch(console.error).finally(() => rl.close());

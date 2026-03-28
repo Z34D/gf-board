@@ -8,6 +8,9 @@
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR" || exit 1
 
+# Bun PATH
+export PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:$PATH"
+
 # Wait for desktop to be fully loaded
 sleep 10
 

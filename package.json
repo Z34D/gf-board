@@ -3,15 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun server/index.ts",
+    "start": "bun --smol server/index.ts",
     "dev": "DEV_MODE=true bun --hot server/index.ts",
     "setup": "bun scripts/install.ts"
   },
   "dependencies": {
+    "croner": "^9.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zustand": "^5.0.8",
-    "croner": "^9.0.0"
+    "tailwindcss": "^4.2.2",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "bun-plugin-tailwind": "^0.1.2",

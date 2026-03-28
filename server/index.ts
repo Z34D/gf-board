@@ -26,6 +26,10 @@ async function loadConfig(): Promise<Config> {
   return { selectedLocation: null, schedulerInterval: "daily1am" };
 }
 
+async function saveConfig(cfg: Config): Promise<void> {
+  await Bun.write(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+}
+
 let config = await loadConfig();
 
 // --- Sync state ---
@@ -55,7 +59,7 @@ function spawnChromium(): void {
   chromiumKilled = false;
 
   const args = [
-    "chromium-browser",
+    "chromium",
     "--kiosk",
     `--user-data-dir=${process.env.HOME}/.chromium-kiosk`,
     "--ozone-platform=wayland",
