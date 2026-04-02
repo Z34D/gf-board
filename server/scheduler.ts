@@ -30,7 +30,7 @@ export function startScheduler(
   console.log(`[scheduler] Sync: ${interval} (next: ${syncJob.nextRun()?.toLocaleString("de-DE")})`);
 
   restartJob = new Cron("0 3 * * *", onRestart);
-  console.log(`[scheduler] Chromium restart: daily 3:00 AM`);
+  console.log(`[scheduler] Neustart: täglich 3:00 Uhr (nächster: ${restartJob.nextRun()?.toLocaleString("de-DE")})`);
 }
 
 export function setSchedule(interval: Interval, onSync: () => void): void {

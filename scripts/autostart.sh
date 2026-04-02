@@ -29,8 +29,8 @@ bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
 
 # Start server in a loop (crash recovery)
 while true; do
-    echo "[autostart] Starting server..."
-    bun run start 2>&1 > /tmp/kiosk-server.log
-    echo "[autostart] Server exited, restarting in 10s..."
+    echo "[autostart] Bun gestartet: $(date '+%d.%m.%Y %H:%M:%S')" >> /tmp/kiosk-server.log
+    bun run start 2>&1 >> /tmp/kiosk-server.log
+    echo "[autostart] Bun beendet: $(date '+%d.%m.%Y %H:%M:%S') -- Neustart in 10s..." >> /tmp/kiosk-server.log
     sleep 10
 done
