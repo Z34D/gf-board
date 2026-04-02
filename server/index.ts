@@ -308,9 +308,13 @@ async function doScheduledSync() {
 // --- Startup ---
 
 startScheduler(config.schedulerInterval, () => doScheduledSync(), () => {
-  if (!DEV_MODE && chromiumProc) {
-    console.log("[scheduler] 3 AM restart: killing Chromium...");
-    chromiumProc.kill();
+  if (!DEV_MODE) {
+    console.log("[scheduler] 3 AM restart: exiting for full restart...");
+    if (chromiumProc) {
+      chromiumKilled = true;
+      chromiumProc.kill();
+    }
+    process.exit(0);
   }
 });
 

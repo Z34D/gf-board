@@ -20,7 +20,7 @@ bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
 # Start server in a loop (crash recovery)
 while true; do
     echo "[autostart] Starting server..."
-    bun run start 2>&1 | tee -a /tmp/kiosk-server.log
+    bun run start 2>&1 > /tmp/kiosk-server.log
     echo "[autostart] Server exited, restarting in 10s..."
     sleep 10
 done
