@@ -172,7 +172,7 @@ async function setupAutostart() {
   console.log("[*] Konfiguriere Kiosk-Autostart...");
   await shellRun(`mkdir -p ${AUTOSTART_DIR}`);
 
-  const autostart = `lxterminal --title="GF-Kiosk" -e bash -c 'tail -n 50 -f /tmp/kiosk-server.log' &\nbash ${KIOSK_DIR}/scripts/autostart.sh &\n`;
+  const autostart = `bash ${KIOSK_DIR}/scripts/autostart.sh &\n`;
   await Bun.write(AUTOSTART_FILE, autostart);
   console.log("[OK] Autostart konfiguriert");
 }

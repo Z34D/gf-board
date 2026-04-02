@@ -11,6 +11,16 @@ cd "$REPO_DIR" || exit 1
 # Bun PATH
 export PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:$PATH"
 
+# Wait for XWayland socket to be ready
+for i in $(seq 1 200); do
+    [ -S /tmp/.X11-unix/X0 ] && break
+    sleep 0.1
+done
+
+# Open terminal with server log (visible after Alt+Q kills Chromium)
+touch /tmp/kiosk-server.log
+DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 lxterminal --title="GF-Kiosk" -e bash -c 'tail -n 200 -f /tmp/kiosk-server.log' &
+
 # Wait for desktop to be fully loaded
 sleep 10
 
