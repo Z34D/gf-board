@@ -1,42 +1,20 @@
 import { Cron } from "croner";
-
-export type Interval = "5min" | "4hours" | "8hours" | "daily1am";
+import { log } from "./logger";
 
 let syncJob: Cron | null = null;
 let restartJob: Cron | null = null;
 
-function intervalToCron(interval: Interval): string {
-  switch (interval) {
-    case "5min":
-      return "*/5 * * * *";
-    case "4hours":
-      return "0 */4 * * *";
-    case "8hours":
-      return "0 */8 * * *";
-    case "daily1am":
-      return "0 1 * * *";
-  }
-}
-
-export function startScheduler(
-  interval: Interval,
-  onSync: () => void,
-  onRestart: () => void,
-): void {
+export function startScheduler(onSync: () => void, onRestart: () => void): void {
   if (syncJob) syncJob.stop();
   if (restartJob) restartJob.stop();
 
-  syncJob = new Cron(intervalToCron(interval), onSync);
-  console.log(`[scheduler] Sync: ${interval} (next: ${syncJob.nextRun()?.toLocaleString("de-DE")})`);
+  // Sync täglich um 1:00
+  syncJob = new Cron("0 1 * * *", onSync);
+  log("scheduler", `Sync: täglich 01:00 (nächster: ${syncJob.nextRun()?.toLocaleString("de-DE")})`);
 
+  // Restart täglich um 3:00
   restartJob = new Cron("0 3 * * *", onRestart);
-  console.log(`[scheduler] Neustart: täglich 3:00 Uhr (nächster: ${restartJob.nextRun()?.toLocaleString("de-DE")})`);
-}
-
-export function setSchedule(interval: Interval, onSync: () => void): void {
-  if (syncJob) syncJob.stop();
-  syncJob = new Cron(intervalToCron(interval), onSync);
-  console.log(`[scheduler] Sync updated: ${interval} (next: ${syncJob.nextRun()?.toLocaleString("de-DE")})`);
+  log("scheduler", `Restart: täglich 03:00 (nächster: ${restartJob.nextRun()?.toLocaleString("de-DE")})`);
 }
 
 export function getNextSync(): string | null {

@@ -12,8 +12,7 @@ interface SlideShowAction {
     | "START_LOADING"
     | "MEDIA_READY"
     | "PLAY"
-    | "TRANSITION_START"
-    | "PAUSE";
+    | "TRANSITION_START";
 }
 
 const reducer = (
@@ -29,8 +28,6 @@ const reducer = (
       return "PLAYING";
     case "TRANSITION_START":
       return "TRANSITIONING";
-    case "PAUSE":
-      return "READY";
     default:
       return state;
   }
@@ -59,7 +56,7 @@ export const useSlideshowMachine = (slides: Slide[]) => {
     }
   }, [slides.length, state]);
 
-  // Slides ready to play — check that all have a valid href (no blob: check needed)
+  // Slides ready to play — check that all have a valid href
   useEffect(() => {
     if (state === "LOADING") {
       const allReady = slides.length > 0 && slides.every((s) => !!s.href);
@@ -136,20 +133,6 @@ export const useSlideshowMachine = (slides: Slide[]) => {
     }
   }, [state, currentIndex, slides]);
 
-  const goToNext = useCallback(() => {
-    const nextIndex = (currentIndex + 1) % slides.length;
-    goToSlide(nextIndex, "next");
-  }, [currentIndex, slides.length]);
-
-  useEffect(() => {
-    goToNextRef.current = goToNext;
-  }, [goToNext]);
-
-  const goToPrev = useCallback(() => {
-    const prevIndex = currentIndex === 0 ? slides.length - 1 : currentIndex - 1;
-    goToSlide(prevIndex, "prev");
-  }, [currentIndex, slides.length]);
-
   const goToSlide = useCallback(
     (index: number, dir: "next" | "prev") => {
       if (
@@ -177,6 +160,22 @@ export const useSlideshowMachine = (slides: Slide[]) => {
     [currentIndex, slides.length, state],
   );
 
+  const goToNext = useCallback(() => {
+    if (slides.length === 0) return;
+    const nextIndex = (currentIndex + 1) % slides.length;
+    goToSlide(nextIndex, "next");
+  }, [currentIndex, slides.length, goToSlide]);
+
+  useEffect(() => {
+    goToNextRef.current = goToNext;
+  }, [goToNext]);
+
+  const goToPrev = useCallback(() => {
+    if (slides.length === 0) return;
+    const prevIndex = currentIndex === 0 ? slides.length - 1 : currentIndex - 1;
+    goToSlide(prevIndex, "prev");
+  }, [currentIndex, slides.length, goToSlide]);
+
   useEffect(() => {
     return () => {
       if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current);
@@ -193,6 +192,5 @@ export const useSlideshowMachine = (slides: Slide[]) => {
     videoRef,
     goToNext,
     goToPrev,
-    goToSlide,
   };
 };

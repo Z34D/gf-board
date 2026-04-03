@@ -1,19 +1,20 @@
 import { type Subprocess } from "bun";
 import path from "node:path";
 import { syncLocation } from "./gdrive";
-import { startScheduler, setSchedule, getNextSync, type Interval } from "./scheduler";
+import { startScheduler, getNextSync } from "./scheduler";
+import { log } from "./logger";
 import homepage from "../frontend/index.html";
 
 const DEV_MODE = process.env.DEV_MODE === "true";
 const PORT = Number(process.env.PORT) || 3000;
 const MEDIA_DIR = "./media";
 const CONFIG_PATH = "./config.json";
+const LOCATIONS = ["flieden", "neuhof", "gersfeld", "schlitz", "eichenzell"];
 
 // --- Config persistence ---
 
 interface Config {
   selectedLocation: string | null;
-  schedulerInterval: Interval;
 }
 
 async function loadConfig(): Promise<Config> {
@@ -23,7 +24,7 @@ async function loadConfig(): Promise<Config> {
       return await file.json();
     }
   } catch { /* corrupt or missing */ }
-  return { selectedLocation: null, schedulerInterval: "daily1am" };
+  return { selectedLocation: null };
 }
 
 async function saveConfig(cfg: Config): Promise<void> {
@@ -58,6 +59,10 @@ function spawnChromium(): void {
 
   chromiumKilled = false;
 
+  const startUrl = config.selectedLocation
+    ? `http://localhost:${PORT}/${config.selectedLocation}`
+    : `http://localhost:${PORT}/`;
+
   const args = [
     "chromium",
     "--kiosk",
@@ -85,23 +90,31 @@ function spawnChromium(): void {
     "--use-mock-keychain",
     "--enable-features=OverlayScrollbar",
     "--disable-features=Translate,TranslateUI",
-    `http://localhost:${PORT}/`,
+    startUrl,
   ];
 
-  console.log("[chromium] Launching kiosk...");
+  log("chromium", `Starte Kiosk → ${startUrl}`);
   chromiumProc = Bun.spawn(args, {
     stdout: "ignore",
     stderr: "ignore",
     onExit(_proc, exitCode) {
       chromiumProc = null;
       if (chromiumKilled) {
-        console.log("[chromium] Stopped (Alt+Q)");
+        log("chromium", "Beendet (manuell)");
         return;
       }
-      console.log(`[chromium] Crashed (code ${exitCode}), restarting in 2s...`);
+      log("chromium", `Abgestürzt (code ${exitCode}), Neustart in 2s...`);
       setTimeout(spawnChromium, 2000);
     },
   });
+}
+
+function restartChromium(): void {
+  if (!chromiumProc || DEV_MODE) return;
+  log("chromium", "Neustart nach Sync...");
+  chromiumKilled = true;
+  chromiumProc.kill();
+  setTimeout(spawnChromium, 1000);
 }
 
 // --- Helper: list media files for a location ---
@@ -120,15 +133,14 @@ async function listMediaFiles(location: string): Promise<MediaFile[]> {
     const glob = new Bun.Glob("*");
     for await (const name of glob.scan({ cwd: dir })) {
       const isVideo = /\.(mp4|webm|mov|avi)$/i.test(name);
-      const stat = Bun.file(`${dir}/${name}`);
       files.push({
         name,
         type: isVideo ? "video" : "image",
-        size: stat.size,
+        size: Bun.file(`${dir}/${name}`).size,
       });
     }
   } catch {
-    // Directory doesn't exist yet — return empty
+    // Directory doesn't exist yet
   }
 
   return files;
@@ -136,10 +148,10 @@ async function listMediaFiles(location: string): Promise<MediaFile[]> {
 
 // --- Sync helper ---
 
-function runSync(location: string): void {
+function triggerSync(location: string): void {
   if (syncStatus.isSyncing) return;
 
-  syncStatus = { isSyncing: true, lastSync: syncStatus.lastSync, error: null, message: "Starting sync..." };
+  syncStatus = { isSyncing: true, lastSync: syncStatus.lastSync, error: null, message: "Sync gestartet..." };
 
   syncLocation(location, MEDIA_DIR, (msg) => {
     syncStatus.message = msg;
@@ -151,6 +163,9 @@ function runSync(location: string): void {
         error: result.error ?? null,
         message: null,
       };
+      if (result.success && (result.downloaded > 0 || result.updated > 0 || result.deleted > 0)) {
+        restartChromium();
+      }
     })
     .catch((err) => {
       syncStatus = {
@@ -168,44 +183,32 @@ Bun.serve({
   port: PORT,
   routes: {
     "/": homepage,
+    "/flieden": homepage,
+    "/neuhof": homepage,
+    "/gersfeld": homepage,
+    "/schlitz": homepage,
+    "/eichenzell": homepage,
 
-    "/api/files": async () => {
-      if (!config.selectedLocation) {
-        return Response.json({ files: [], location: null });
+    "/api/files/:location": async (req) => {
+      const location = req.params.location.toLowerCase();
+      if (!LOCATIONS.includes(location)) {
+        return Response.json({ error: "Unknown location" }, { status: 404 });
       }
-      const files = await listMediaFiles(config.selectedLocation);
-      return Response.json({ files, location: config.selectedLocation });
+      const files = await listMediaFiles(location);
+      return Response.json({ files, location });
     },
 
     "/api/status": () => {
       const mem = process.memoryUsage();
       return Response.json({
         selectedLocation: config.selectedLocation,
-        schedulerConfig: {
-          enabled: true,
-          interval: config.schedulerInterval,
-          nextSync: getNextSync(),
-        },
         syncStatus,
+        nextSync: getNextSync(),
         memory: {
           rss: Math.round(mem.rss / 1024 / 1024),
           heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
         },
       });
-    },
-
-    "/api/sync": {
-      POST: () => {
-        if (!config.selectedLocation) {
-          return Response.json({ error: "No location selected" }, { status: 400 });
-        }
-        if (syncStatus.isSyncing) {
-          return Response.json({ error: "Sync already in progress" }, { status: 409 });
-        }
-
-        runSync(config.selectedLocation);
-        return Response.json({ ok: true, message: "Sync started" });
-      },
     },
 
     "/api/set-location": {
@@ -216,32 +219,21 @@ Bun.serve({
         config.selectedLocation = location;
         await saveConfig(config);
 
-        if (!location) {
-          return Response.json({ ok: true, location: null });
-        }
-
-        runSync(location);
+        if (location) triggerSync(location);
         return Response.json({ ok: true, location });
       },
     },
 
-    "/api/set-scheduler": {
-      POST: async (req) => {
-        const body = await req.json();
-        const interval = body.interval as Interval;
-        if (!interval) {
-          return Response.json({ error: "Missing interval" }, { status: 400 });
+    "/api/sync": {
+      POST: () => {
+        if (!config.selectedLocation) {
+          return Response.json({ error: "No location selected" }, { status: 400 });
         }
-
-        config.schedulerInterval = interval;
-        await saveConfig(config);
-        setSchedule(interval, () => doScheduledSync());
-
-        return Response.json({
-          ok: true,
-          interval,
-          nextSync: getNextSync(),
-        });
+        if (syncStatus.isSyncing) {
+          return Response.json({ error: "Sync already in progress" }, { status: 409 });
+        }
+        triggerSync(config.selectedLocation);
+        return Response.json({ ok: true });
       },
     },
 
@@ -250,7 +242,7 @@ Bun.serve({
         if (chromiumProc) {
           chromiumKilled = true;
           chromiumProc.kill();
-          return Response.json({ ok: true, message: "Chromium killed" });
+          return Response.json({ ok: true });
         }
         return Response.json({ ok: false, message: "No Chromium process" });
       },
@@ -260,6 +252,7 @@ Bun.serve({
   fetch(req) {
     const url = new URL(req.url);
 
+    // Media files: /media/{location}/{file}
     if (url.pathname.startsWith("/media/")) {
       const resolvedMedia = path.resolve(MEDIA_DIR);
       const filePath = path.resolve(MEDIA_DIR, decodeURIComponent(url.pathname.slice("/media/".length)));
@@ -269,62 +262,44 @@ Bun.serve({
       return new Response(Bun.file(filePath));
     }
 
-    return new Response(Bun.file("./frontend/index.html"), {
-      headers: { "Content-Type": "text/html" },
-    });
+    return new Response("Not Found", { status: 404 });
+  },
+
+  error(error) {
+    log("server", `✗ Unhandled: ${error.message}`);
+    return new Response("Internal Error", { status: 500 });
   },
 
   development: DEV_MODE,
 });
 
-// --- Scheduled sync ---
-
-async function doScheduledSync() {
-  if (!config.selectedLocation || syncStatus.isSyncing) return;
-
-  console.log(`[scheduler] Sync for ${config.selectedLocation}`);
-  syncStatus = { isSyncing: true, lastSync: syncStatus.lastSync, error: null, message: "Scheduled sync..." };
-
-  try {
-    const result = await syncLocation(config.selectedLocation, MEDIA_DIR, (msg) => {
-      syncStatus.message = msg;
-    });
-    syncStatus = {
-      isSyncing: false,
-      lastSync: result.success ? new Date().toISOString() : syncStatus.lastSync,
-      error: result.error ?? null,
-      message: null,
-    };
-  } catch (err) {
-    syncStatus = {
-      isSyncing: false,
-      lastSync: syncStatus.lastSync,
-      error: err instanceof Error ? err.message : "Unknown error",
-      message: null,
-    };
-  }
-}
-
 // --- Startup ---
 
-startScheduler(config.schedulerInterval, () => doScheduledSync(), () => {
-  if (!DEV_MODE) {
-    console.log("[scheduler] 3 AM restart: exiting for full restart...");
-    if (chromiumProc) {
-      chromiumKilled = true;
-      chromiumProc.kill();
+startScheduler(
+  () => {
+    if (config.selectedLocation && !syncStatus.isSyncing) {
+      log("scheduler", `Sync für ${config.selectedLocation}`);
+      triggerSync(config.selectedLocation);
     }
-    process.exit(0);
-  }
-});
+  },
+  () => {
+    if (!DEV_MODE) {
+      log("server", "3 AM Restart");
+      if (chromiumProc) {
+        chromiumKilled = true;
+        chromiumProc.kill();
+      }
+      process.exit(0);
+    }
+  },
+);
 
 spawnChromium();
 
-console.log(`[server] GF-Kiosk running on http://localhost:${PORT}`);
-console.log(`[server] Mode: ${DEV_MODE ? "DEVELOPMENT" : "PRODUCTION"}`);
-console.log(`[server] Location: ${config.selectedLocation ?? "(none)"}`);
-console.log(`[server] Sync interval: ${config.schedulerInterval}`);
-
 if (config.selectedLocation) {
-  doScheduledSync();
+  log("server", `Location: ${config.selectedLocation}`);
+  log("server", `GF-Kiosk gestartet → http://localhost:${PORT}/${config.selectedLocation.toLowerCase()}`);
+  triggerSync(config.selectedLocation);
+} else {
+  log("server", `GF-Kiosk gestartet → http://localhost:${PORT} (keine Location)`);
 }

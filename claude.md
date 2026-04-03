@@ -1,15 +1,14 @@
 # GF-Board
 
-> Digital Signage Kiosk fuer GetFit Fitnessstudios. Bun-Server auf Raspberry Pi, Media-Sync via Google Drive.
+> Digital Signage Kiosk fuer GetFit Fitnessstudios. Bun-Server auf Raspberry Pi, Media-Sync direkt via Google Drive API.
 
 ## Quick Reference
 
 | Item | Value |
 |------|-------|
 | **Runtime** | Bun 1.3.x |
-| **Frontend** | React 19 + Zustand + Tailwind CSS v4 |
+| **Frontend** | React 19 + Tailwind CSS v4 |
 | **Server** | Bun.serve (native, kein Framework) |
-| **Worker** | Separates Repo: `gf-board-worker` (Cloudflare Workers + Hono) |
 | **Target** | Raspberry Pi 4/5 + Chromium Kiosk (24/7) |
 
 ## Commands
@@ -25,33 +24,29 @@ bash scripts/setup.sh  # Erstinstallation (Bun installieren + Setup)
 
 ```
 gf-board/
-├── frontend/                    # React Frontend
-│   ├── app.tsx                  # Entry: App-Komponente + Mount
+├── frontend/                    # React Frontend (kein Store, kein Router)
+│   ├── app.tsx                  # Entry: Location aus URL, Mount
 │   ├── index.html               # HTML Entry (Bun bundelt automatisch)
 │   ├── index.css                # Tailwind + Kiosk-Styles
-│   ├── components/
-│   │   ├── LocationSelectionView.tsx   # Standort-Auswahl + Scheduler-Config
-│   │   ├── SlideshowView.tsx           # Slideshow mit Keyboard/Touch Nav
-│   │   ├── Slide.tsx                   # Einzelner Slide (Bild/Video)
-│   │   └── slideshow/hooks/
-│   │       └── useSlideshowMachine.ts  # State Machine: IDLE->LOADING->PLAYING
-│   ├── stores/appStore.ts       # Zustand Store (Location, Files, Scheduler)
-│   └── utils/errors.ts          # Global Error Handlers
+│   ├── LocationSelectionView.tsx # Standort-Auswahl (navigiert zu /{location})
+│   ├── Slideshow.tsx            # Slideshow + Slide (Keyboard/Touch Nav)
+│   └── useSlideshowMachine.ts   # State Machine: IDLE->LOADING->PLAYING
 ├── server/                      # Bun Kiosk Server
 │   ├── index.ts                 # HTTP Server, Chromium Management, API Routes
-│   ├── sync.ts                  # Media-Sync: Worker API -> lokale Disk
-│   └── scheduler.ts             # Cron-basierter Sync-Scheduler (croner)
+│   ├── gdrive.ts                # Media-Sync: Google Drive API -> lokale Disk
+│   ├── scheduler.ts             # Cron: Sync 01:00, Restart 03:00 (croner)
+│   └── logger.ts                # Log Helper (Timestamp + Tag)
 ├── scripts/                     # Setup & Autostart
 │   ├── setup.sh                 # Erstinstallation (Bun + Dependencies + Setup)
 │   ├── install.ts               # Interaktives Pi-Setup (WLAN, Autostart, .env)
 │   ├── autostart.sh             # labwc Autostart (Update + Crash-Recovery-Loop)
 │   └── update.sh                # Git Auto-Update bei Neustart
-├── package.json                 # Kiosk Dependencies (react, zustand, croner)
+├── package.json                 # Kiosk Dependencies (react, croner)
 ├── bunfig.toml                  # Bun Tailwind Plugin
 ├── .gitignore
 ├── media/                       # (gitignored) Sync-Output pro Location
-├── config.json                  # (gitignored) Runtime State
-└── .env                         # (gitignored) KIOSK_PIN + WORKER_URL
+├── config.json                  # (gitignored) Runtime State (selectedLocation)
+└── .env                         # (gitignored) GOOGLE_DRIVE_API_KEY + ROOT_FOLDER_ID
 ```
 
 ## Architektur
@@ -59,40 +54,50 @@ gf-board/
 ```
 Raspberry Pi
 ├── Bun Server (server/index.ts)
-│   ├── Servt Frontend (HTML Import)
+│   ├── Servt Frontend (HTML Import, Bun bundelt JS/CSS)
+│   ├── Routes: /, /flieden, /neuhof, /gersfeld, /schlitz, /eichenzell
 │   ├── Servt Media-Dateien von Disk (/media/{location}/{file})
-│   ├── API Endpoints (/api/files, /api/status, /api/set-location, ...)
+│   ├── API Endpoints (/api/files/:location, /api/status, ...)
 │   ├── Spawnt Chromium als Child Process (Crash-Recovery)
-│   └── Cron: Sync-Scheduler + 3 AM Chromium-Restart
+│   ├── Chromium-Restart nach Sync (wenn Dateien geaendert)
+│   └── Cron: Sync 01:00 + Restart 03:00
 │
-├── Chromium --kiosk → http://localhost:3000
+├── Chromium --kiosk → http://localhost:3000/{location}
 │
 └── scripts/autostart.sh (labwc)
     ├── update.sh → git fetch + reset --hard (safe, exit 0 immer)
     └── while true: bun run start (Crash-Recovery-Loop)
 
-    ↓ HTTPS (nur fuer Sync)
+    ↓ HTTPS (Google Drive API direkt)
 
-Cloudflare Worker (separates Repo: gf-board-worker)
-├── POST /api/auth/login (PIN → JWT Cookie)
-├── GET /api/locations/:location/files (Google Drive Ordner lesen)
-└── ALL /api/drive/* (Google Drive API Proxy, Streaming)
-    ↓
 Google Drive (Media Files pro Standort)
 ```
+
+## URL-Routing
+
+Location wird ueber URL bestimmt, kein Client-Side State:
+
+| URL | Anzeige |
+|-----|---------|
+| `/` | Standort-Auswahl |
+| `/flieden` | Slideshow fuer Flieden |
+| `/gersfeld` | Slideshow fuer Gersfeld |
+| ... | ... |
+
+Frontend liest Location aus `window.location.pathname`. Kein Store, kein State Management.
 
 ## Sync-Flow
 
 ```
-Bun-Server → Worker /api/auth/login (PIN, bekommt JWT Cookie)
-           → Worker /api/locations/{location}/files (Dateiliste)
+Bun-Server → Google Drive API /files (Dateiliste, API Key)
            → Vergleich mit lokalen Files auf Disk (modified-Time)
-           → Worker /api/drive/files/{id}?alt=media (nur neue/geaenderte)
-           → Download in .tmp, dann rename() (quasi-atomar)
+           → Google Drive API /files/{id}?alt=media (nur neue/geaenderte)
+           → Download in .tmp, dann rename() (atomar)
+           → Retry 3x mit Backoff (2s, 4s, 6s) bei Fehlern
+           → Tmp-Cleanup bei Sync-Start (Crash-Recovery)
            → Geloeschte Files werden von Disk entfernt
+           → Chromium-Restart wenn Dateien geaendert
 ```
-
-Session-Cookie wird gecached. Bei 401 automatisch Re-Login.
 
 ## Autostart-Flow (Pi Boot)
 
@@ -127,14 +132,14 @@ Root Folder/
 
 | Endpoint | Methode | Beschreibung |
 |----------|---------|-------------|
-| `/` | GET | Frontend (HTML Import) |
+| `/` | GET | Location-Auswahl (Frontend) |
+| `/{location}` | GET | Slideshow (Frontend) |
 | `/media/{location}/{file}` | GET | Media-Dateien von Disk |
-| `/api/files` | GET | Dateiliste der aktuellen Location |
-| `/api/status` | GET | Location, Scheduler, Sync-Status, Memory |
+| `/api/files/{location}` | GET | Dateiliste einer Location |
+| `/api/status` | GET | Location, Sync-Status, naechster Sync, Memory |
 | `/api/sync` | POST | Manuellen Sync triggern |
 | `/api/set-location` | POST | Location aendern (triggert Sync) |
-| `/api/set-scheduler` | POST | Sync-Intervall aendern |
-| `/api/kill-kiosk` | POST | Chromium dauerhaft beenden (Alt+Q) |
+| `/api/kill-kiosk` | POST | Chromium beenden (Alt+Q) |
 
 ## Keyboard Navigation
 
@@ -145,14 +150,11 @@ Root Folder/
 | L | Zurueck zur Standort-Auswahl |
 | Alt+Q | Chromium beenden (via API) |
 
-## Sync-Intervalle (konfigurierbar)
+## Sync-Zeitplan (fest)
 
-- 5 Minuten
-- 4 Stunden
-- 8 Stunden
-- Taeglich um 1:00 Uhr (Default)
-
-3 AM: Chromium-Restart (frischer Browser-State, kein Server-Neustart)
+- 01:00 Uhr: Automatischer Sync mit Google Drive
+- 03:00 Uhr: Chromium-Restart (frischer Browser-State, kein Server-Neustart)
+- Nach jedem Sync: Chromium-Restart wenn Dateien geaendert wurden
 
 ## Erstinstallation auf Pi
 
@@ -161,34 +163,34 @@ git clone https://github.com/Z34D/gf-board.git
 cd gf-board
 bash scripts/setup.sh
 # → Installiert Bun, Dependencies, startet interaktives Setup
-# → Fragt WLAN, PIN, konfiguriert Autostart
+# → Fragt WLAN, Google Drive API Key, konfiguriert Autostart
 sudo reboot
 ```
 
 ## Environment (.env, gitignored)
 
 ```
-KIOSK_PIN=0000
-WORKER_URL=https://gf-kiosk.brandwork.tech
+GOOGLE_DRIVE_API_KEY=...
+GOOGLE_DRIVE_ROOT_FOLDER_ID=...
 ```
 
 Wird von `scripts/install.ts` erstellt.
 
-## Worker Deploy (separates Repo)
+## Logging
 
-Siehe `gf-board-worker` Repo (`../gf-board-worker/`).
+Format: `HH:MM:SS [tag] message`
 
-```bash
-cd ../gf-board-worker
-bun install
-bun run deploy    # wrangler deploy --keep-vars
+```
+14:32:05 [server] Location: Flieden
+14:32:05 [server] GF-Kiosk gestartet → http://localhost:3000/flieden
+14:32:05 [sync] Gestartet: Flieden
+14:32:06 [sync] +3 neu, ~1 geaendert, -2 geloescht, =6 aktuell
+14:32:08 [sync] ↓ video1.mp4 (2/4, 24.3MB)
+14:32:45 [sync] Fertig (40.2s): +3 neu, ~1 geaendert, -2 geloescht
+14:32:46 [chromium] Neustart nach Sync...
 ```
 
-Cloudflare Env-Vars (im Dashboard gesetzt):
-- `GOOGLE_DRIVE_API_KEY`
-- `GOOGLE_DRIVE_ROOT_FOLDER_ID`
-- `KIOSK_PIN`
-- `JWT_SECRET`
+Tags: `server`, `sync`, `chromium`, `scheduler`
 
 ## Debugging auf Pi
 
