@@ -73,10 +73,11 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
 
   useEffect(() => {
     fetch(`/api/files/${location}`)
-      .then((r) => r.json() as Promise<{ files: MediaFile[] }>)
+      .then((r) => r.json() as Promise<{ files: MediaFile[]; location: string }>)
       .then((data) => {
+        const loc = data.location;
         setSlides((data.files ?? []).map((f) => ({
-          href: `/media/${location}/${f.name}`,
+          href: `/media/${loc}/${f.name}`,
           type: f.type,
           name: f.name,
         })));

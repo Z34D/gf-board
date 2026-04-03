@@ -9,7 +9,11 @@ const DEV_MODE = process.env.DEV_MODE === "true";
 const PORT = Number(process.env.PORT) || 3000;
 const MEDIA_DIR = "./media";
 const CONFIG_PATH = "./config.json";
-const LOCATIONS = ["flieden", "neuhof", "gersfeld", "schlitz", "eichenzell"];
+const LOCATIONS = ["Flieden", "Neuhof", "Gersfeld", "Schlitz", "Eichenzell"];
+
+function findLocation(slug: string): string | undefined {
+  return LOCATIONS.find((l) => l.toLowerCase() === slug.toLowerCase());
+}
 
 // --- Config persistence ---
 
@@ -60,7 +64,7 @@ function spawnChromium(): void {
   chromiumKilled = false;
 
   const startUrl = config.selectedLocation
-    ? `http://localhost:${PORT}/${config.selectedLocation}`
+    ? `http://localhost:${PORT}/${config.selectedLocation.toLowerCase()}`
     : `http://localhost:${PORT}/`;
 
   const args = [
@@ -190,12 +194,12 @@ Bun.serve({
     "/eichenzell": homepage,
 
     "/api/files/:location": async (req) => {
-      const location = req.params.location.toLowerCase();
-      if (!LOCATIONS.includes(location)) {
+      const loc = findLocation(req.params.location);
+      if (!loc) {
         return Response.json({ error: "Unknown location" }, { status: 404 });
       }
-      const files = await listMediaFiles(location);
-      return Response.json({ files, location });
+      const files = await listMediaFiles(loc);
+      return Response.json({ files, location: loc });
     },
 
     "/api/status": () => {
@@ -214,13 +218,14 @@ Bun.serve({
     "/api/set-location": {
       POST: async (req) => {
         const body = await req.json();
-        const location = body.location as string | null;
+        const raw = body.location as string | null;
+        const loc = raw ? findLocation(raw) ?? null : null;
 
-        config.selectedLocation = location;
+        config.selectedLocation = loc;
         await saveConfig(config);
 
-        if (location) triggerSync(location);
-        return Response.json({ ok: true, location });
+        if (loc) triggerSync(loc);
+        return Response.json({ ok: true, location: loc });
       },
     },
 
