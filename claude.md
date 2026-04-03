@@ -92,6 +92,7 @@ Frontend liest Location aus `window.location.pathname`. Kein Store, kein State M
 Bun-Server → Google Drive API /files (Dateiliste, API Key)
            → Vergleich mit lokalen Files auf Disk (modified-Time)
            → Google Drive API /files/{id}?alt=media (nur neue/geaenderte)
+           → Streaming Download via FileSink (chunked, kein Memory-Buffer)
            → Download in .tmp, dann rename() (atomar)
            → Retry 3x mit Backoff (2s, 4s, 6s) bei Fehlern
            → Tmp-Cleanup bei Sync-Start (Crash-Recovery)
@@ -220,3 +221,8 @@ sudo reboot
 ### Chromium "Aw, Snap!" Error 5
 Out of memory nach Wochen Betrieb.
 Mitigation: 3 AM Chromium-Restart + autostart.sh Crash-Recovery-Loop.
+
+### Bun.write(path, Response) haengt auf ARM/Linux
+`Bun.write(targetPath, res)` mit einem fetch Response haengt auf Raspberry Pi.
+Fix: Streaming via `Bun.file().writer()` + `for await (chunk of res.body)`.
+Nicht `Bun.write` fuer fetch Responses auf Pi verwenden!
