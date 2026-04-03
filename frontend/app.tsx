@@ -8,25 +8,16 @@ import "./index.css";
 
 setupGlobalErrorHandlers();
 
-const FILE_POLL_INTERVAL = 10_000;
-
 function App() {
   const selectedLocation = useAppStore((s) => s.selectedLocation);
   const initializing = useAppStore((s) => s.initializing);
   const mediaFiles = useAppStore((s) => s.mediaFiles);
 
-  // Load server state on mount
+  // Load server state once on mount
   useEffect(() => {
     const store = useAppStore.getState();
     store.fetchStatus().then(() => store.loadFiles());
   }, []);
-
-  // Periodically check for new/changed files (covers sync finishing in background)
-  useEffect(() => {
-    if (!selectedLocation) return;
-    const id = setInterval(() => useAppStore.getState().loadFiles(), FILE_POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [selectedLocation]);
 
   if (initializing) return null;
 
