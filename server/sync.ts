@@ -148,6 +148,20 @@ async function listLocalFiles(mediaDir: string, location: string): Promise<Map<s
   return map;
 }
 
+// --- Internet check ---
+
+async function hasInternet(): Promise<boolean> {
+  try {
+    await fetch("https://1.1.1.1", {
+      method: "HEAD",
+      signal: AbortSignal.timeout(5_000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- Main sync ---
 
 export async function syncLocation(
@@ -157,6 +171,15 @@ export async function syncLocation(
 ): Promise<SyncResult> {
   try {
     console.log(`[sync] Starting: ${location}`);
+    onProgress?.("Checking internet...");
+
+    const online = await hasInternet();
+    if (!online) {
+      console.log("[sync] Kein Internet -- Sync übersprungen");
+      return { success: false, downloaded: 0, updated: 0, deleted: 0, unchanged: 0, error: "Kein Internet" };
+    }
+
+    console.log("[sync] Internet OK");
     onProgress?.("Fetching file list...");
 
     const driveFiles = await fetchLocationFiles(location);
