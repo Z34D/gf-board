@@ -101,7 +101,9 @@ export const useSlideshowMachine = (slides: Slide[]) => {
 
         if (slides.length > 1) {
           const actualDuration =
-            video.duration || currentSlide.videoDuration || 10;
+            (Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null)
+            ?? currentSlide.videoDuration
+            ?? 10;
           const duration = Math.ceil(actualDuration * 1000);
 
           autoPlayTimerRef.current = setTimeout(() => {

@@ -34,6 +34,7 @@ async function ensureSession(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pin: KIOSK_PIN }),
     redirect: "manual",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!res.ok) {
