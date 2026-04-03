@@ -31,6 +31,10 @@ async function listFolder(folderId: string): Promise<DriveFile[]> {
   return data.files ?? [];
 }
 
+/**
+ * Fetches all media files for a location: shared/ first, then location-specific.
+ * Location files take priority over shared files with the same filename.
+ */
 async function fetchLocationFiles(location: string): Promise<DriveFile[]> {
   const isMedia = (f: DriveFile) =>
     f.mimeType.startsWith("image/") || f.mimeType.startsWith("video/");
@@ -44,13 +48,29 @@ async function fetchLocationFiles(location: string): Promise<DriveFile[]> {
     (f) => f.name.toLowerCase() === location.toLowerCase() && f.mimeType === "application/vnd.google-apps.folder",
   );
 
-  const files: DriveFile[] = [];
-  if (sharedFolder) files.push(...(await listFolder(sharedFolder.id)).filter(isMedia));
-  if (locationFolder) files.push(...(await listFolder(locationFolder.id)).filter(isMedia));
-  return files;
+  const fileMap = new Map<string, DriveFile>();
+
+  // Shared files first (lower priority)
+  if (sharedFolder) {
+    for (const f of (await listFolder(sharedFolder.id)).filter(isMedia)) {
+      fileMap.set(f.name, f);
+    }
+  }
+  // Location files override shared files with same name
+  if (locationFolder) {
+    for (const f of (await listFolder(locationFolder.id)).filter(isMedia)) {
+      fileMap.set(f.name, f);
+    }
+  }
+
+  return [...fileMap.values()];
 }
 
-async function downloadFile(fileId: string, targetPath: string): Promise<boolean> {
+/**
+ * Downloads a file and verifies the written size matches the expected size.
+ * Returns false if the download fails or the file is truncated.
+ */
+async function downloadFile(fileId: string, targetPath: string, expectedSize: number): Promise<boolean> {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(10 * 60 * 1000) });
@@ -59,6 +79,15 @@ async function downloadFile(fileId: string, targetPath: string): Promise<boolean
       return false;
     }
     await Bun.write(targetPath, res);
+
+    // Verify file size to catch truncated downloads
+    const written = Bun.file(targetPath).size;
+    if (written !== expectedSize) {
+      console.error(`[ERR] Size mismatch for ${path.basename(targetPath)}: expected ${expectedSize}, got ${written}`);
+      try { await Bun.file(targetPath).delete(); } catch { /* ignore */ }
+      return false;
+    }
+
     return true;
   } catch (err) {
     console.error(`[ERR] Download error for ${targetPath}:`, err instanceof Error ? err.message : err);
@@ -83,6 +112,11 @@ async function listLocalFiles(mediaDir: string, location: string): Promise<Map<s
 
 // --- Main sync ---
 
+/**
+ * Syncs media files for a location from Google Drive.
+ * Checks internet connectivity first. Downloads new/updated files and removes
+ * deleted ones. Uses temp files + rename for atomic writes.
+ */
 export async function syncLocation(
   location: string,
   mediaDir: string,
@@ -153,16 +187,17 @@ export async function syncLocation(
 
     for (let i = 0; i < allToFetch.length; i++) {
       const file = allToFetch[i];
+      const expectedSize = Number(file.size);
       onProgress?.(`Downloading ${file.name} (${i + 1}/${allToFetch.length})...`);
       const tmpPath = path.join(locationDir, `.${file.name}.tmp`);
       const finalPath = path.join(locationDir, file.name);
 
-      const ok = await downloadFile(file.id, tmpPath);
+      const ok = await downloadFile(file.id, tmpPath, expectedSize);
       if (ok) {
         await rename(tmpPath, finalPath);
       } else {
         onProgress?.(`Retrying ${file.name}...`);
-        const retry = await downloadFile(file.id, tmpPath);
+        const retry = await downloadFile(file.id, tmpPath, expectedSize);
         if (retry) {
           await rename(tmpPath, finalPath);
         } else {

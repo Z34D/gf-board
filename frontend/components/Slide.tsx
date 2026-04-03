@@ -41,7 +41,7 @@ export const Slide: React.FC<SlideProps> = ({
   if (isActive && !isTransitioning) {
     translateX = "0%";
   } else if (isActive && isTransitioning) {
-    translateX = "-100%";
+    translateX = direction === "next" ? "-100%" : "100%";
   } else if (isIncoming && isTransitioning) {
     translateX = "100%";
   }

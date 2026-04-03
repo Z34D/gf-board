@@ -100,8 +100,9 @@ export const useSlideshowMachine = (slides: Slide[]) => {
         video.play().catch(() => {});
 
         if (slides.length > 1) {
-          const actualDuration =
-            video.duration || currentSlide.videoDuration || 10;
+          const actualDuration = Number.isFinite(video.duration) && video.duration > 0
+            ? video.duration
+            : (currentSlide.videoDuration ?? 10);
           const duration = Math.ceil(actualDuration * 1000);
 
           autoPlayTimerRef.current = setTimeout(() => {
@@ -109,6 +110,8 @@ export const useSlideshowMachine = (slides: Slide[]) => {
           }, duration);
         }
       };
+
+      let cleanupCanPlay: (() => void) | undefined;
 
       if (video.readyState >= 2) {
         playVideo();
@@ -118,7 +121,12 @@ export const useSlideshowMachine = (slides: Slide[]) => {
           video.removeEventListener("canplay", handleCanPlay);
         };
         video.addEventListener("canplay", handleCanPlay);
+        cleanupCanPlay = () => video.removeEventListener("canplay", handleCanPlay);
       }
+
+      return () => {
+        cleanupCanPlay?.();
+      };
     } else if (currentSlide.type === "image") {
       const IMAGE_DURATION = 10000;
 
