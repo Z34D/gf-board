@@ -9,11 +9,7 @@ const DEV_MODE = process.env.DEV_MODE === "true";
 const PORT = Number(process.env.PORT) || 3000;
 const MEDIA_DIR = "./media";
 const CONFIG_PATH = "./config.json";
-const LOCATIONS = ["Flieden", "Neuhof", "Gersfeld", "Schlitz", "Eichenzell"];
-
-function findLocation(slug: string): string | undefined {
-  return LOCATIONS.find((l) => l.toLowerCase() === slug.toLowerCase());
-}
+const LOCATIONS = ["flieden", "neuhof", "gersfeld", "schlitz", "eichenzell"];
 
 // --- Config persistence ---
 
@@ -25,7 +21,9 @@ async function loadConfig(): Promise<Config> {
   try {
     const file = Bun.file(CONFIG_PATH);
     if (await file.exists()) {
-      return await file.json();
+      const cfg = await file.json() as Config;
+      if (cfg.selectedLocation) cfg.selectedLocation = cfg.selectedLocation.toLowerCase();
+      return cfg;
     }
   } catch { /* corrupt or missing */ }
   return { selectedLocation: null };
@@ -64,7 +62,7 @@ function spawnChromium(): void {
   chromiumKilled = false;
 
   const startUrl = config.selectedLocation
-    ? `http://localhost:${PORT}/${config.selectedLocation.toLowerCase()}`
+    ? `http://localhost:${PORT}/${config.selectedLocation}`
     : `http://localhost:${PORT}/`;
 
   const args = [
@@ -194,12 +192,12 @@ Bun.serve({
     "/eichenzell": homepage,
 
     "/api/files/:location": async (req) => {
-      const loc = findLocation(req.params.location);
-      if (!loc) {
+      const location = req.params.location.toLowerCase();
+      if (!LOCATIONS.includes(location)) {
         return Response.json({ error: "Unknown location" }, { status: 404 });
       }
-      const files = await listMediaFiles(loc);
-      return Response.json({ files, location: loc });
+      const files = await listMediaFiles(location);
+      return Response.json({ files, location });
     },
 
     "/api/status": () => {
@@ -218,14 +216,13 @@ Bun.serve({
     "/api/set-location": {
       POST: async (req) => {
         const body = await req.json();
-        const raw = body.location as string | null;
-        const loc = raw ? findLocation(raw) ?? null : null;
+        const location = body.location ? String(body.location).toLowerCase() : null;
 
-        config.selectedLocation = loc;
+        config.selectedLocation = location;
         await saveConfig(config);
 
-        if (loc) triggerSync(loc);
-        return Response.json({ ok: true, location: loc });
+        if (location) triggerSync(location);
+        return Response.json({ ok: true, location });
       },
     },
 
@@ -303,7 +300,7 @@ spawnChromium();
 
 if (config.selectedLocation) {
   log("server", `Location: ${config.selectedLocation}`);
-  log("server", `GF-Kiosk gestartet → http://localhost:${PORT}/${config.selectedLocation.toLowerCase()}`);
+  log("server", `GF-Kiosk gestartet → http://localhost:${PORT}/${config.selectedLocation}`);
   triggerSync(config.selectedLocation);
 } else {
   log("server", `GF-Kiosk gestartet → http://localhost:${PORT} (keine Location)`);
