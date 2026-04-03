@@ -1,6 +1,6 @@
 import { type Subprocess } from "bun";
 import path from "node:path";
-import { syncLocation } from "./sync";
+import { syncLocation } from "./gdrive";
 import { startScheduler, setSchedule, getNextSync, type Interval } from "./scheduler";
 import homepage from "../frontend/index.html";
 

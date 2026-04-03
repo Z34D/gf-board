@@ -178,13 +178,13 @@ async function setupAutostart() {
 }
 
 async function setupEnv() {
-  console.log("\n[*] Kiosk-Konfiguration:");
-  const pin = await ask("KIOSK_PIN: ");
-  const workerUrl = await ask("WORKER_URL [https://gf-kiosk.brandwork.tech]: ");
+  console.log("\n[*] Google Drive Konfiguration:");
+  const apiKey = await ask("GOOGLE_DRIVE_API_KEY: ");
+  const folderId = await ask("GOOGLE_DRIVE_ROOT_FOLDER_ID: ");
 
   const lines = [
-    `KIOSK_PIN=${pin || "0000"}`,
-    `WORKER_URL=${workerUrl || "https://gf-kiosk.brandwork.tech"}`,
+    `GOOGLE_DRIVE_API_KEY=${apiKey}`,
+    `GOOGLE_DRIVE_ROOT_FOLDER_ID=${folderId}`,
   ];
 
   await Bun.write(`${KIOSK_DIR}/.env`, lines.join("\n") + "\n");

@@ -1,8 +1,8 @@
 import { mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 
-const WORKER_URL = process.env.WORKER_URL ?? "https://gf-kiosk.brandwork.tech";
-const KIOSK_PIN = process.env.KIOSK_PIN ?? "0000";
+const API_KEY = process.env.GOOGLE_DRIVE_API_KEY ?? "";
+const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? "";
 
 interface DriveFile {
   id: string;
@@ -21,105 +21,43 @@ export interface SyncResult {
   error?: string;
 }
 
-// --- Session management ---
+// --- Google Drive API ---
 
-let sessionCookie: string | null = null;
-
-async function ensureSession(): Promise<void> {
-  if (sessionCookie) return;
-
-  console.log("[sync] Logging in to Worker...");
-  const res = await fetch(`${WORKER_URL}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: KIOSK_PIN }),
-    redirect: "manual",
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Login failed: ${res.status} ${res.statusText}`);
-  }
-
-  const setCookie = res.headers.get("set-cookie");
-  if (setCookie) {
-    const match = setCookie.match(/kiosk_session=([^;]+)/);
-    if (match) {
-      sessionCookie = match[1];
-      console.log("[sync] Worker session established");
-      return;
-    }
-  }
-
-  throw new Error("Login succeeded but no session cookie received");
-}
-
-function clearSession(): void {
-  sessionCookie = null;
-}
-
-function authHeaders(): Record<string, string> {
-  return sessionCookie ? { Cookie: `kiosk_session=${sessionCookie}` } : {};
-}
-
-// --- API calls ---
-
-async function fetchLocationFiles(location: string): Promise<DriveFile[]> {
-  await ensureSession();
-
-  const url = `${WORKER_URL}/api/locations/${encodeURIComponent(location)}/files`;
-  const res = await fetch(url, { headers: authHeaders() });
-
-  if (res.status === 401) {
-    clearSession();
-    await ensureSession();
-    const retry = await fetch(url, { headers: authHeaders() });
-    if (!retry.ok) {
-      throw new Error(`Worker API error: ${retry.status} ${retry.statusText}`);
-    }
-    const data = (await retry.json()) as { files: DriveFile[] };
-    return data.files ?? [];
-  }
-
-  if (!res.ok) {
-    throw new Error(`Worker API error: ${res.status} ${res.statusText}`);
-  }
-
+async function listFolder(folderId: string): Promise<DriveFile[]> {
+  const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&key=${API_KEY}&fields=files(id,name,mimeType,size,modifiedTime)`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`Drive API error: ${res.status} ${res.statusText}`);
   const data = (await res.json()) as { files: DriveFile[] };
   return data.files ?? [];
 }
 
+async function fetchLocationFiles(location: string): Promise<DriveFile[]> {
+  const isMedia = (f: DriveFile) =>
+    f.mimeType.startsWith("image/") || f.mimeType.startsWith("video/");
+
+  const rootEntries = await listFolder(ROOT_FOLDER_ID);
+
+  const sharedFolder = rootEntries.find(
+    (f) => f.name.toLowerCase() === "shared" && f.mimeType === "application/vnd.google-apps.folder",
+  );
+  const locationFolder = rootEntries.find(
+    (f) => f.name.toLowerCase() === location.toLowerCase() && f.mimeType === "application/vnd.google-apps.folder",
+  );
+
+  const files: DriveFile[] = [];
+  if (sharedFolder) files.push(...(await listFolder(sharedFolder.id)).filter(isMedia));
+  if (locationFolder) files.push(...(await listFolder(locationFolder.id)).filter(isMedia));
+  return files;
+}
+
 async function downloadFile(fileId: string, targetPath: string): Promise<boolean> {
-  await ensureSession();
-
-  const url = `${WORKER_URL}/api/drive/files/${fileId}?alt=media`;
-
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${API_KEY}`;
   try {
-    const res = await fetch(url, {
-      headers: authHeaders(),
-      signal: AbortSignal.timeout(10 * 60 * 1000),
-    });
-
-    if (res.status === 401) {
-      clearSession();
-      await ensureSession();
-      const retry = await fetch(url, {
-        headers: authHeaders(),
-        signal: AbortSignal.timeout(10 * 60 * 1000),
-      });
-      if (!retry.ok) {
-        console.error(`[ERR] Download failed (${retry.status}): ${targetPath}`);
-        return false;
-      }
-      await Bun.write(targetPath, retry);
-      return true;
-    }
-
+    const res = await fetch(url, { signal: AbortSignal.timeout(10 * 60 * 1000) });
     if (!res.ok) {
       console.error(`[ERR] Download failed (${res.status}): ${targetPath}`);
       return false;
     }
-
     await Bun.write(targetPath, res);
     return true;
   } catch (err) {
@@ -128,38 +66,19 @@ async function downloadFile(fileId: string, targetPath: string): Promise<boolean
   }
 }
 
-// --- Local file comparison ---
+// --- Local file listing ---
 
 async function listLocalFiles(mediaDir: string, location: string): Promise<Map<string, number>> {
   const dir = path.join(mediaDir, location);
   const map = new Map<string, number>();
-
   const glob = new Bun.Glob("*");
   try {
     for await (const name of glob.scan({ cwd: dir, onlyFiles: true })) {
       if (name.startsWith(".") && name.endsWith(".tmp")) continue;
-      const file = Bun.file(path.join(dir, name));
-      map.set(name, file.lastModified);
+      map.set(name, Bun.file(path.join(dir, name)).lastModified);
     }
-  } catch {
-    // Directory doesn't exist yet
-  }
-
+  } catch { /* directory doesn't exist yet */ }
   return map;
-}
-
-// --- Internet check ---
-
-async function hasInternet(): Promise<boolean> {
-  try {
-    await fetch("https://1.1.1.1", {
-      method: "HEAD",
-      signal: AbortSignal.timeout(5_000),
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // --- Main sync ---
@@ -173,15 +92,15 @@ export async function syncLocation(
     console.log(`[sync] Starting: ${location}`);
     onProgress?.("Checking internet...");
 
-    const online = await hasInternet();
-    if (!online) {
+    try {
+      await fetch("https://1.1.1.1", { method: "HEAD", signal: AbortSignal.timeout(5_000) });
+    } catch {
       console.log("[sync] Kein Internet -- Sync übersprungen");
       return { success: false, downloaded: 0, updated: 0, deleted: 0, unchanged: 0, error: "Kein Internet" };
     }
-
     console.log("[sync] Internet OK");
-    onProgress?.("Fetching file list...");
 
+    onProgress?.("Fetching file list...");
     const driveFiles = await fetchLocationFiles(location);
 
     if (driveFiles.length === 0) {
@@ -205,8 +124,7 @@ export async function syncLocation(
       if (localModified === undefined) {
         toDownload.push(file);
       } else {
-        const driveModified = new Date(file.modifiedTime).getTime();
-        if (driveModified > localModified) {
+        if (new Date(file.modifiedTime).getTime() > localModified) {
           toUpdate.push(file);
         } else {
           unchanged++;
@@ -215,34 +133,27 @@ export async function syncLocation(
     }
 
     for (const [name] of localFiles) {
-      if (!driveMap.has(name)) {
-        toDelete.push(name);
-      }
+      if (!driveMap.has(name)) toDelete.push(name);
     }
 
-    console.log(
-      `[sync] Plan: ${toDownload.length} new, ${toUpdate.length} updated, ${toDelete.length} deleted, ${unchanged} unchanged`,
-    );
+    console.log(`[sync] Plan: ${toDownload.length} new, ${toUpdate.length} updated, ${toDelete.length} deleted, ${unchanged} unchanged`);
 
     if (toDownload.length === 0 && toUpdate.length === 0 && toDelete.length === 0) {
       console.log("[sync] Already up to date");
       return { success: true, downloaded: 0, updated: 0, deleted: 0, unchanged };
     }
 
-    // Delete removed files using Bun.file().delete()
     for (const name of toDelete) {
       onProgress?.(`Deleting ${name}...`);
       await Bun.file(path.join(locationDir, name)).delete();
     }
 
-    // Download new + updated files (to temp, then rename)
     const allToFetch = [...toDownload, ...toUpdate];
     const failed: string[] = [];
 
     for (let i = 0; i < allToFetch.length; i++) {
       const file = allToFetch[i];
       onProgress?.(`Downloading ${file.name} (${i + 1}/${allToFetch.length})...`);
-
       const tmpPath = path.join(locationDir, `.${file.name}.tmp`);
       const finalPath = path.join(locationDir, file.name);
 
@@ -273,17 +184,8 @@ export async function syncLocation(
       };
     }
 
-    console.log(
-      `[sync] Complete: ${toDownload.length} downloaded, ${toUpdate.length} updated, ${toDelete.length} deleted`,
-    );
-
-    return {
-      success: true,
-      downloaded: toDownload.length,
-      updated: toUpdate.length,
-      deleted: toDelete.length,
-      unchanged,
-    };
+    console.log(`[sync] Complete: ${toDownload.length} downloaded, ${toUpdate.length} updated, ${toDelete.length} deleted`);
+    return { success: true, downloaded: toDownload.length, updated: toUpdate.length, deleted: toDelete.length, unchanged };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("[ERR] Sync failed:", msg);
