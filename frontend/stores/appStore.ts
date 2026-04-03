@@ -65,7 +65,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
       const res = await fetch("/api/files");
       if (!res.ok) return;
       const data: FilesResponse = await res.json();
-      set({ mediaFiles: data.files ?? [] });
+      const next = data.files ?? [];
+      const curr = get().mediaFiles;
+      const changed = next.length !== curr.length ||
+        next.some((f, i) => f.name !== curr[i]?.name || f.size !== curr[i]?.size);
+      if (changed) set({ mediaFiles: next });
     } catch { /* offline */ }
   },
 
