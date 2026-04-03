@@ -80,7 +80,13 @@ async function downloadFile(fileId: string, targetPath: string, expectedSize: nu
     return false;
   }
 
-  await Bun.write(targetPath, res);
+  if (!res.body) return false;
+
+  const writer = Bun.file(targetPath).writer();
+  for await (const chunk of res.body) {
+    writer.write(chunk);
+  }
+  await writer.end();
 
   const written = Bun.file(targetPath).size;
   if (written !== expectedSize) {
