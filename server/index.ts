@@ -54,12 +54,12 @@ let syncStatus: SyncStatus = {
 // --- Chromium process management ---
 
 let chromiumProc: Subprocess | null = null;
-let chromiumKilled = false;
+let chromiumKillReason: "manuell" | "sync" | "neustart" | null = null;
 
 function spawnChromium(): void {
   if (DEV_MODE) return;
 
-  chromiumKilled = false;
+  chromiumKillReason = null;
 
   const startUrl = config.selectedLocation
     ? `http://localhost:${PORT}/${config.selectedLocation}`
@@ -101,8 +101,8 @@ function spawnChromium(): void {
     stderr: "ignore",
     onExit(_proc, exitCode) {
       chromiumProc = null;
-      if (chromiumKilled) {
-        log("chromium", "Beendet (manuell)");
+      if (chromiumKillReason) {
+        log("chromium", `Beendet (${chromiumKillReason})`);
         return;
       }
       log("chromium", `Abgestürzt (code ${exitCode}), Neustart in 2s...`);
@@ -114,7 +114,7 @@ function spawnChromium(): void {
 function restartChromium(): void {
   if (!chromiumProc || DEV_MODE) return;
   log("chromium", "Neustart nach Sync...");
-  chromiumKilled = true;
+  chromiumKillReason = "sync";
   chromiumProc.kill();
   setTimeout(spawnChromium, 1000);
 }
@@ -242,7 +242,7 @@ Bun.serve({
     "/api/kill-kiosk": {
       POST: () => {
         if (chromiumProc) {
-          chromiumKilled = true;
+          chromiumKillReason = "manuell";
           chromiumProc.kill();
           return Response.json({ ok: true });
         }
@@ -288,7 +288,7 @@ startScheduler(
     if (!DEV_MODE) {
       log("server", "3 AM Restart");
       if (chromiumProc) {
-        chromiumKilled = true;
+        chromiumKillReason = "neustart";
         chromiumProc.kill();
       }
       process.exit(0);
