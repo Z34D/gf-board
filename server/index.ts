@@ -71,7 +71,6 @@ function spawnChromium(): void {
     `--user-data-dir=${process.env.HOME}/.chromium-kiosk`,
     "--ozone-platform=wayland",
     "--disable-dev-shm-usage",
-    "--memory-pressure-off",
     "--disable-background-networking",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
@@ -297,6 +296,27 @@ startScheduler(
 );
 
 spawnChromium();
+
+// --- Resource monitoring (every 5 min) ---
+
+setInterval(async () => {
+  const mem = process.memoryUsage();
+  const bunRss = Math.round(mem.rss / 1024 / 1024);
+  const bunHeap = Math.round(mem.heapUsed / 1024 / 1024);
+
+  let chromeMb = 0;
+  if (chromiumProc?.pid) {
+    try {
+      const result = Bun.spawnSync(["bash", "-c", `ps -o rss= --ppid ${chromiumProc.pid} 2>/dev/null; ps -o rss= -p ${chromiumProc.pid} 2>/dev/null`]);
+      const output = result.stdout.toString().trim();
+      if (output) {
+        chromeMb = Math.round(output.split("\n").reduce((sum, line) => sum + (parseInt(line.trim()) || 0), 0) / 1024);
+      }
+    } catch {}
+  }
+
+  log("monitor", `Bun: ${bunRss}MB RSS, ${bunHeap}MB Heap | Chrome: ${chromeMb}MB`);
+}, 5 * 60_000);
 
 if (config.selectedLocation) {
   log("server", `Location: ${config.selectedLocation}`);
