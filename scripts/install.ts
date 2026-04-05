@@ -10,6 +10,7 @@
 const KIOSK_DIR = process.cwd();
 const AUTOSTART_DIR = `${process.env.HOME}/.config/labwc`;
 const AUTOSTART_FILE = `${AUTOSTART_DIR}/autostart`;
+const RC_XML_FILE = `${AUTOSTART_DIR}/rc.xml`;
 const BOOT_CONFIG = "/boot/firmware/config.txt";
 
 // --- Helpers ---
@@ -172,9 +173,40 @@ async function setupAutostart() {
   console.log("[*] Konfiguriere Kiosk-Autostart...");
   await shellRun(`mkdir -p ${AUTOSTART_DIR}`);
 
-  const autostart = `bash ${KIOSK_DIR}/scripts/autostart.sh &\n`;
+  const autostart = [
+    `bash ${KIOSK_DIR}/scripts/autostart.sh &`,
+    // Hide mouse cursor after 5s idle (triggers labwc's HideCursor action via wtype).
+    // Cursor reappears automatically on pointer movement (labwc built-in behavior).
+    `swayidle -w timeout 5 'wtype -M alt -M logo -k h' &`,
+    "",
+  ].join("\n");
   await Bun.write(AUTOSTART_FILE, autostart);
   console.log("[OK] Autostart konfiguriert");
+}
+
+async function setupCursorHide() {
+  console.log("[*] Installiere Cursor-Hide Tools (wtype, swayidle)...");
+  if (!await shellRun("sudo apt-get install -y --no-install-recommends wtype swayidle")) {
+    console.log("[!] wtype/swayidle konnten nicht installiert werden (ueberspringe)");
+    return;
+  }
+
+  console.log("[*] Schreibe labwc rc.xml mit HideCursor-Keybind...");
+  await shellRun(`mkdir -p ${AUTOSTART_DIR}`);
+  const rcXml = `<?xml version="1.0"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <core>
+    <xwaylandPersistence>yes</xwaylandPersistence>
+  </core>
+  <keyboard>
+    <keybind key="A-W-h">
+      <action name="HideCursor"/>
+    </keybind>
+  </keyboard>
+</openbox_config>
+`;
+  await Bun.write(RC_XML_FILE, rcXml);
+  console.log("[OK] Cursor-Hide konfiguriert (5s Idle -> weg, Maus-Bewegung -> zurueck)");
 }
 
 async function setupEnv() {
@@ -204,6 +236,7 @@ async function main() {
   await disableTranslate();
   await disableScreensaver();
   await disableAutoUpdates();
+  await setupCursorHide();
   await setupAutostart();
   await setupEnv();
 

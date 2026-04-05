@@ -113,6 +113,9 @@ labwc Desktop startet
         ├── git reset --hard origin/main (nie Merge-Conflicts)
         └── bun install (timeout 120s, skip wenn fehlschlaegt)
       → while true: bun run start (Crash-Recovery-Loop)
+    → swayidle -w timeout 5 'wtype ...' &
+      → nach 5s Idle: sendet Alt+Super+H an labwc
+      → labwc HideCursor action: Cursor weg, bei Maus-Bewegung zurueck
 ```
 
 ## 5 Standorte
@@ -262,3 +265,23 @@ Nicht `Bun.write` fuer fetch Responses auf Pi verwenden!
 Chromium gibt Video-Decoder-Buffer nicht frei wenn Video-Elemente aus dem DOM entfernt werden.
 Fix: Vor dem Entfernen: `video.pause(); video.removeAttribute('src'); video.load();`
 Zusaetzlich: Nur 1 Video-Element gleichzeitig im DOM halten.
+
+### Maus-Cursor verstecken auf labwc/Wayland
+`unclutter` / `unclutter-xfixes` funktionieren **nicht** auf labwc (wlroots-basiert) —
+der Compositor verwaltet den Pointer selbst und ignoriert X11-Cursor-Manipulationen von
+XWayland-Clients. Chromium CSS `cursor: none` wirkt nur innerhalb der Page, nicht auf dem
+Desktop drumherum.
+
+**Loesung (seit labwc 0.8.2):** labwc hat eine eingebaute `HideCursor` action, die den
+Cursor sofort versteckt und bei jeder Maus-/Touchpad-Bewegung automatisch wieder zeigt.
+Die Action laesst sich nur an Keybinds haengen — wir triggern sie per `swayidle` + `wtype`:
+
+1. `~/.config/labwc/rc.xml`: Keybind `A-W-h` -> `HideCursor` action
+2. `~/.config/labwc/autostart`: `swayidle -w timeout 5 'wtype -M alt -M logo -k h' &`
+3. `scripts/install.ts::setupCursorHide()` installiert `wtype` + `swayidle` per apt und
+   schreibt beide Files idempotent.
+
+Ergebnis: Cursor verschwindet 5s nach letzter Maus-Bewegung, erscheint sofort bei
+Bewegung wieder — funktioniert auf nacktem Desktop (Debugging) und im Chromium-Kiosk.
+
+Referenzen: labwc PR #2273 (touch auto-hide), labwc PR #2633 (HideCursor action).
