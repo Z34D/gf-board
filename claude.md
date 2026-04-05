@@ -29,8 +29,7 @@ gf-board/
 │   ├── index.html               # HTML Entry (Bun bundelt automatisch)
 │   ├── index.css                # Tailwind + Kiosk-Styles
 │   ├── LocationSelectionView.tsx # Standort-Auswahl (navigiert zu /{location})
-│   ├── Slideshow.tsx            # Slideshow + Slide (Keyboard/Touch Nav)
-│   └── useSlideshowMachine.ts   # State Machine: IDLE->LOADING->PLAYING
+│   └── Slideshow.tsx            # Slideshow (1 Slide im DOM, Video-Cleanup, Heartbeat)
 ├── server/                      # Bun Kiosk Server
 │   ├── index.ts                 # HTTP Server, Chromium Management, API Routes
 │   ├── gdrive.ts                # Media-Sync: Google Drive API -> lokale Disk
@@ -60,6 +59,8 @@ Raspberry Pi
 │   ├── API Endpoints (/api/files/:location, /api/status, ...)
 │   ├── Spawnt Chromium als Child Process (Crash-Recovery)
 │   ├── Chromium-Restart nach Sync (wenn Dateien geaendert)
+│   ├── Heartbeat-Watchdog: Chromium-Restart wenn Frontend nicht antwortet
+│   ├── Resource-Monitoring alle 5 Min (Bun + Chrome Memory)
 │   └── Cron: Sync 01:00 + Restart 03:00
 │
 ├── Chromium --kiosk → http://localhost:3000/{location}
@@ -137,9 +138,10 @@ Root Folder/
 | `/{location}` | GET | Slideshow (Frontend) |
 | `/media/{location}/{file}` | GET | Media-Dateien von Disk |
 | `/api/files/{location}` | GET | Dateiliste einer Location |
-| `/api/status` | GET | Location, Sync-Status, naechster Sync, Memory |
+| `/api/status` | GET | Location, Sync-Status, naechster Sync, Memory, Watchdog |
 | `/api/sync` | POST | Manuellen Sync triggern |
 | `/api/set-location` | POST | Location aendern (triggert Sync) |
+| `/api/heartbeat` | POST | Frontend-Heartbeat (alle 60s, Watchdog-Reset) |
 | `/api/kill-kiosk` | POST | Chromium beenden (Alt+Q) |
 
 ## Keyboard Navigation
@@ -191,7 +193,7 @@ Format: `HH:MM:SS [tag] message`
 14:32:46 [chromium] Neustart nach Sync...
 ```
 
-Tags: `server`, `sync`, `chromium`, `scheduler`
+Tags: `server`, `sync`, `chromium`, `scheduler`, `monitor`
 
 ## Debugging auf Pi
 
@@ -216,13 +218,47 @@ sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt
 sudo reboot
 ```
 
+## Watchdog
+
+```
+Frontend (Slideshow.tsx)
+  → POST /api/heartbeat alle 60s
+
+Server (index.ts)
+  → Prueft alle 60s ob Heartbeat < 2 Min alt
+  → Kein Heartbeat → Chromium-Restart
+  → 3x hintereinander kein Heartbeat → process.exit(1)
+  → autostart.sh while-loop startet alles neu
+```
+
+## Video-Stability
+
+- Nur 1 Slide gleichzeitig im DOM (via React key={currentIndex})
+- Video-Cleanup bei jedem Slide-Wechsel: pause() + removeAttribute('src') + load()
+- Chromium gibt Video-Buffer ohne load() nie frei (bekannter Chrome-Bug)
+- Video-Advance via 'ended' Event, nicht Duration-Timer
+- Error-Handler: kaputtes Video wird uebersprungen
+- Safety-Timeout: 5 Min fuer stuck Videos
+
+## Resource Monitoring
+
+Alle 5 Minuten in /tmp/kiosk-server.log:
+```
+14:35:00 [monitor] Bun: 42MB RSS, 18MB Heap | Chrome: 312MB
+```
+
 ## Known Issues
 
 ### Chromium "Aw, Snap!" Error 5
 Out of memory nach Wochen Betrieb.
-Mitigation: 3 AM Chromium-Restart + autostart.sh Crash-Recovery-Loop.
+Mitigation: 3 AM Chromium-Restart + Heartbeat-Watchdog + autostart.sh Crash-Recovery-Loop.
 
 ### Bun.write(path, Response) haengt auf ARM/Linux
 `Bun.write(targetPath, res)` mit einem fetch Response haengt auf Raspberry Pi.
 Fix: Streaming via `Bun.file().writer()` + `for await (chunk of res.body)`.
 Nicht `Bun.write` fuer fetch Responses auf Pi verwenden!
+
+### Chromium Video-Buffer Memory Leak
+Chromium gibt Video-Decoder-Buffer nicht frei wenn Video-Elemente aus dem DOM entfernt werden.
+Fix: Vor dem Entfernen: `video.pause(); video.removeAttribute('src'); video.load();`
+Zusaetzlich: Nur 1 Video-Element gleichzeitig im DOM halten.

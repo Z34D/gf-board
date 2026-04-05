@@ -56,10 +56,19 @@ let syncStatus: SyncStatus = {
 let chromiumProc: Subprocess | null = null;
 let chromiumKillReason: "manuell" | "sync" | "neustart" | null = null;
 
+// --- Heartbeat watchdog ---
+
+let lastHeartbeat = Date.now();
+let consecutiveFailedChecks = 0;
+const HEARTBEAT_CHECK_INTERVAL = 60_000;
+const HEARTBEAT_TIMEOUT = 2 * 60_000;
+const MAX_FAILED_RESTARTS = 3;
+
 function spawnChromium(): void {
   if (DEV_MODE) return;
 
   chromiumKillReason = null;
+  lastHeartbeat = Date.now(); // give fresh Chromium time to load
 
   const startUrl = config.selectedLocation
     ? `http://localhost:${PORT}/${config.selectedLocation}`
@@ -209,6 +218,11 @@ Bun.serve({
           rss: Math.round(mem.rss / 1024 / 1024),
           heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
         },
+        watchdog: {
+          lastHeartbeat: new Date(lastHeartbeat).toISOString(),
+          secondsSinceHeartbeat: Math.round((Date.now() - lastHeartbeat) / 1000),
+          consecutiveFailedChecks,
+        },
       });
     },
 
@@ -234,6 +248,14 @@ Bun.serve({
           return Response.json({ error: "Sync already in progress" }, { status: 409 });
         }
         triggerSync(config.selectedLocation);
+        return Response.json({ ok: true });
+      },
+    },
+
+    "/api/heartbeat": {
+      POST: () => {
+        lastHeartbeat = Date.now();
+        consecutiveFailedChecks = 0;
         return Response.json({ ok: true });
       },
     },
@@ -317,6 +339,32 @@ setInterval(async () => {
 
   log("monitor", `Bun: ${bunRss}MB RSS, ${bunHeap}MB Heap | Chrome: ${chromeMb}MB`);
 }, 5 * 60_000);
+
+// --- Heartbeat watchdog (every 60s) ---
+
+setInterval(() => {
+  if (DEV_MODE || !chromiumProc || !config.selectedLocation) return;
+
+  const elapsed = Date.now() - lastHeartbeat;
+  if (elapsed < HEARTBEAT_TIMEOUT) return;
+
+  consecutiveFailedChecks++;
+  log("monitor", `Kein Heartbeat seit ${Math.round(elapsed / 1000)}s (${consecutiveFailedChecks}/${MAX_FAILED_RESTARTS})`);
+
+  if (consecutiveFailedChecks >= MAX_FAILED_RESTARTS) {
+    log("monitor", `${MAX_FAILED_RESTARTS}x kein Heartbeat — process.exit(1)`);
+    if (chromiumProc) {
+      chromiumKillReason = "neustart";
+      chromiumProc.kill();
+    }
+    process.exit(1);
+  }
+
+  log("monitor", "Chromium-Neustart wegen fehlendem Heartbeat...");
+  chromiumKillReason = "neustart";
+  chromiumProc.kill();
+  setTimeout(spawnChromium, 2000);
+}, HEARTBEAT_CHECK_INTERVAL);
 
 if (config.selectedLocation) {
   log("server", `Location: ${config.selectedLocation}`);
