@@ -121,7 +121,7 @@ function spawnChromium(): void {
   // Focus Chromium + hide cursor (xdotool is pre-installed on Pi OS)
   setTimeout(() => {
     Bun.spawnSync(["xdotool", "mousemove", "0", "0", "click", "1"]);
-  }, 3000);
+  }, 15_000);
 }
 
 function restartChromium(): void {
