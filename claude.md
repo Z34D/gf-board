@@ -29,7 +29,7 @@ gf-board/
 │   ├── index.html               # HTML Entry (Bun bundelt automatisch)
 │   ├── index.css                # Tailwind + Kiosk-Styles
 │   ├── LocationSelectionView.tsx # Standort-Auswahl (navigiert zu /{location})
-│   └── Slideshow.tsx            # Slideshow (1 Slide im DOM, Video-Cleanup, Heartbeat)
+│   └── Slideshow.tsx            # Slideshow (Crossfade, Video-Preload, Heartbeat)
 ├── server/                      # Bun Kiosk Server
 │   ├── index.ts                 # HTTP Server, Chromium Management, API Routes
 │   ├── gdrive.ts                # Media-Sync: Google Drive API -> lokale Disk
@@ -236,12 +236,16 @@ Server (index.ts)
 
 ## Video-Stability
 
-- Nur 1 Slide gleichzeitig im DOM (via React key={currentIndex})
-- Video-Cleanup bei jedem Slide-Wechsel: pause() + removeAttribute('src') + load()
-- Chromium gibt Video-Buffer ohne load() nie frei (bekannter Chrome-Bug)
+- Alle Slides im DOM, Sichtbarkeit per CSS opacity-Crossfade (500ms)
+- Bilder: immer geladen, kein Re-Decode bei Slide-Wechsel
+- Videos: nur aktives + naechstes haben `src` gesetzt (max 2 Video-Decoder)
+- Inaktive Videos: `pause() + removeAttribute('src') + load()` gibt Decoder frei
+- Chromium gibt Video-Buffer ohne `load()` nie frei (bekannter Chrome-Bug)
+- Naechstes Video wird mit `preload="auto"` vorgeladen (gleicher DOM-Node)
 - Video-Advance via 'ended' Event, nicht Duration-Timer
 - Error-Handler: kaputtes Video wird uebersprungen
 - Safety-Timeout: 5 Min fuer stuck Videos
+- Page-Reload nach 100 Slide-Wechseln (frischer Chromium-Renderer)
 
 ## Resource Monitoring
 
@@ -264,7 +268,23 @@ Nicht `Bun.write` fuer fetch Responses auf Pi verwenden!
 ### Chromium Video-Buffer Memory Leak
 Chromium gibt Video-Decoder-Buffer nicht frei wenn Video-Elemente aus dem DOM entfernt werden.
 Fix: Vor dem Entfernen: `video.pause(); video.removeAttribute('src'); video.load();`
-Zusaetzlich: Nur 1 Video-Element gleichzeitig im DOM halten.
+Zusaetzlich: Nur aktives + naechstes Video mit `src` belegen, alle anderen leer.
+
+### `--memory-pressure-off` verursacht System-Freeze
+Chromium-Flag `--memory-pressure-off` deaktiviert Chromiums eigene Speicherverwaltung.
+Auf dem Pi fuehrt das zu einem kompletten System-Freeze (kein TTY, keine Tastatur).
+Fix: Flag entfernt. Chromium raeumt jetzt bei Speicherdruck selbst auf.
+
+### Chromium Renderer degradiert ueber Stunden
+Nach 10+ Stunden Dauerbetrieb werden CSS-Transitions ruckelig und Bilder laden
+sichtbar langsam rein (Pi-CPU zu schwach fuer wiederholtes Bild-Dekodieren).
+Fix: Bilder immer im DOM halten (kein Re-Decode), Page-Reload nach 100 Slides,
+3 AM Chromium-Restart.
+
+### xdotool nicht auf Pi OS vorinstalliert
+Entgegen der Dokumentation ist `xdotool` auf Raspberry Pi OS mit labwc Desktop
+NICHT vorinstalliert. `wtype` und `swayidle` muessen per `apt install` nachinstalliert
+werden (erledigt `scripts/install.ts::setupCursorHide()`).
 
 ### Maus-Cursor verstecken auf labwc/Wayland
 `unclutter` / `unclutter-xfixes` funktionieren **nicht** auf labwc (wlroots-basiert) —
