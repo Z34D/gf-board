@@ -15,12 +15,15 @@ interface SlideData {
 const IMAGE_DURATION = 10_000;
 const VIDEO_TIMEOUT = 5 * 60_000;
 const HEARTBEAT_INTERVAL = 60_000;
+const RELOAD_AFTER = 100;
 
 const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const preloadRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef(0);
+  const slideCountRef = useRef(0);
 
   // Fetch slides on mount
   useEffect(() => {
@@ -39,12 +42,10 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   }, [location]);
 
   // Navigation
-  const slideCountRef = useRef(0);
-
   const goToNext = useCallback(() => {
     if (slides.length <= 1) return;
     slideCountRef.current++;
-    if (slideCountRef.current >= 100) {
+    if (slideCountRef.current >= RELOAD_AFTER) {
       window.location.reload();
       return;
     }
@@ -105,9 +106,21 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       video.removeEventListener("error", onError);
       video.pause();
       video.removeAttribute("src");
-      video.load(); // forces Chromium to release video buffers
+      video.load();
     };
   }, [currentIndex, slides, goToNext]);
+
+  // Cleanup preload element when it's no longer needed
+  useEffect(() => {
+    return () => {
+      const preload = preloadRef.current;
+      if (preload) {
+        preload.pause();
+        preload.removeAttribute("src");
+        preload.load();
+      }
+    };
+  }, [currentIndex]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -147,7 +160,9 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     );
   }
 
-  const slide = slides[currentIndex];
+  const currentSlide = slides[currentIndex];
+  const nextIndex = (currentIndex + 1) % slides.length;
+  const nextSlide = slides.length > 1 ? slides[nextIndex] : null;
 
   return (
     <div
@@ -162,23 +177,52 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
         }
       }}
     >
-      <div key={currentIndex} className="w-full h-full fade-in">
-        {slide.type === "video" ? (
+      {/* Images: all in DOM, toggle visibility via opacity transition */}
+      {slides.map((slide, index) =>
+        slide.type === "image" ? (
+          <div
+            key={slide.name}
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: index === currentIndex ? 1 : 0,
+              transition: "opacity 0.5s ease-in-out",
+              zIndex: index === currentIndex ? 1 : 0,
+            }}
+          >
+            <img
+              src={slide.href}
+              alt={slide.name}
+              style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
+            />
+          </div>
+        ) : null,
+      )}
+
+      {/* Video: only current, mounted/unmounted via key */}
+      {currentSlide.type === "video" && (
+        <div key={`video-${currentIndex}`} style={{ position: "absolute", inset: 0, zIndex: 2 }}>
           <video
             ref={videoRef}
-            src={slide.href}
+            src={currentSlide.href}
             muted
             playsInline
             style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
           />
-        ) : (
-          <img
-            src={slide.href}
-            alt={slide.name}
-            style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
-          />
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Preload next video (hidden, just buffering) */}
+      {nextSlide?.type === "video" && nextIndex !== currentIndex && (
+        <video
+          ref={preloadRef}
+          key={`preload-${nextIndex}`}
+          src={nextSlide.href}
+          preload="auto"
+          muted
+          style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+        />
+      )}
     </div>
   );
 };
