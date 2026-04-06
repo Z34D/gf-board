@@ -18,14 +18,77 @@ const HEARTBEAT_INTERVAL = 60_000;
 const RELOAD_AFTER = 100;
 const FADE_DURATION = 500;
 
+// Video element wrapper with proper cleanup
+function VideoSlide({ slide, isActive, isNext, onEnded, onError, videoRef }: {
+  slide: SlideData;
+  isActive: boolean;
+  isNext: boolean;
+  onEnded: () => void;
+  onError: () => void;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+}) {
+  const localRef = useRef<HTMLVideoElement>(null);
+  const ref = isActive ? videoRef : localRef;
+
+  // Active video: play + event listeners
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || !isActive) return;
+
+    video.muted = true;
+    video.play().catch(() => onError());
+
+    video.addEventListener("ended", onEnded);
+    video.addEventListener("error", onError);
+
+    return () => {
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("error", onError);
+    };
+  }, [isActive, onEnded, onError, ref]);
+
+  // Cleanup: when not active and not preloading next
+  useEffect(() => {
+    if (isActive || isNext) return;
+    const video = ref.current;
+    if (!video) return;
+
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }, [isActive, isNext, ref]);
+
+  // Preload next: set src but don't play
+  useEffect(() => {
+    if (!isNext || isActive) return;
+    const video = ref.current;
+    if (!video) return;
+    // Ensure src is set for preloading
+    if (!video.src || !video.src.includes(slide.href)) {
+      video.src = slide.href;
+      video.load();
+    }
+  }, [isNext, isActive, slide.href, ref]);
+
+  return (
+    <video
+      ref={ref}
+      src={isActive || isNext ? slide.href : undefined}
+      preload={isNext ? "auto" : undefined}
+      muted
+      playsInline
+      style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
+    />
+  );
+}
+
 const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [fadingOut, setFadingOut] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef(0);
   const slideCountRef = useRef(0);
-  const pendingIndexRef = useRef<number | null>(null);
+  const transitioningRef = useRef(false);
 
   // Fetch slides on mount
   useEffect(() => {
@@ -43,19 +106,13 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       .catch(() => {});
   }, [location]);
 
-  // Transition: fade out current, then switch index
   const transitionTo = useCallback((nextIndex: number) => {
-    if (fadingOut) return;
-    pendingIndexRef.current = nextIndex;
-    setFadingOut(true);
-    setTimeout(() => {
-      setCurrentIndex(nextIndex);
-      setFadingOut(false);
-      pendingIndexRef.current = null;
-    }, FADE_DURATION);
-  }, [fadingOut]);
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
+    setCurrentIndex(nextIndex);
+    setTimeout(() => { transitioningRef.current = false; }, FADE_DURATION);
+  }, []);
 
-  // Navigation
   const goToNext = useCallback(() => {
     if (slides.length <= 1) return;
     slideCountRef.current++;
@@ -63,14 +120,12 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       window.location.reload();
       return;
     }
-    const next = (currentIndex + 1) % slides.length;
-    transitionTo(next);
+    transitionTo((currentIndex + 1) % slides.length);
   }, [slides.length, currentIndex, transitionTo]);
 
   const goToPrev = useCallback(() => {
     if (slides.length <= 1) return;
-    const prev = currentIndex === 0 ? slides.length - 1 : currentIndex - 1;
-    transitionTo(prev);
+    transitionTo(currentIndex === 0 ? slides.length - 1 : currentIndex - 1);
   }, [slides.length, currentIndex, transitionTo]);
 
   // Heartbeat
@@ -91,38 +146,14 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     return () => clearTimeout(timer);
   }, [currentIndex, slides, goToNext]);
 
-  // Video setup + cleanup
+  // Video safety timeout
   useEffect(() => {
+    if (slides.length <= 1) return;
     const slide = slides[currentIndex];
     if (!slide || slide.type !== "video") return;
 
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.muted = true;
-    video.playsInline = true;
-    if (slides.length === 1) video.loop = true;
-
-    const onEnded = () => goToNext();
-    const onError = () => goToNext();
-
-    video.addEventListener("ended", onEnded);
-    video.addEventListener("error", onError);
-    video.play().catch(() => goToNext());
-
-    let safety: ReturnType<typeof setTimeout> | null = null;
-    if (slides.length > 1) {
-      safety = setTimeout(goToNext, VIDEO_TIMEOUT);
-    }
-
-    return () => {
-      if (safety) clearTimeout(safety);
-      video.removeEventListener("ended", onEnded);
-      video.removeEventListener("error", onError);
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    };
+    const safety = setTimeout(goToNext, VIDEO_TIMEOUT);
+    return () => clearTimeout(safety);
   }, [currentIndex, slides, goToNext]);
 
   // Keyboard navigation
@@ -162,9 +193,7 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     );
   }
 
-  const currentSlide = slides[currentIndex];
-  const nextIndex = pendingIndexRef.current ?? (currentIndex + 1) % slides.length;
-  const nextSlide = slides.length > 1 ? slides[nextIndex] : null;
+  const nextIndex = (currentIndex + 1) % slides.length;
 
   return (
     <div
@@ -175,62 +204,41 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
         if (Math.abs(diff) > 50) { diff > 0 ? goToNext() : goToPrev(); }
       }}
     >
-      {/* Images: all in DOM, crossfade via opacity */}
-      {slides.map((slide, index) =>
-        slide.type === "image" ? (
+      {/* All slides in DOM, opacity crossfade */}
+      {slides.map((slide, index) => {
+        const isActive = index === currentIndex;
+        const isNext = slides.length > 1 && index === nextIndex;
+
+        return (
           <div
             key={slide.name}
             style={{
               position: "absolute",
               inset: 0,
-              opacity: index === currentIndex && !fadingOut ? 1 : 0,
+              opacity: isActive ? 1 : 0,
               transition: `opacity ${FADE_DURATION}ms ease-in-out`,
-              zIndex: index === currentIndex ? 1 : 0,
+              zIndex: isActive ? 2 : isNext ? 1 : 0,
             }}
           >
-            <img
-              src={slide.href}
-              alt={slide.name}
-              style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
-            />
+            {slide.type === "video" ? (
+              <VideoSlide
+                slide={slide}
+                isActive={isActive}
+                isNext={isNext}
+                onEnded={goToNext}
+                onError={goToNext}
+                videoRef={videoRef}
+              />
+            ) : (
+              <img
+                src={slide.href}
+                alt={slide.name}
+                style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
+              />
+            )}
           </div>
-        ) : null,
-      )}
-
-      {/* Next video: preloading underneath (zIndex 2) */}
-      {nextSlide?.type === "video" && nextIndex !== currentIndex && (
-        <div key={`next-video-${nextIndex}`} style={{ position: "absolute", inset: 0, zIndex: 2 }}>
-          <video
-            src={nextSlide.href}
-            preload="auto"
-            muted
-            playsInline
-            style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
-          />
-        </div>
-      )}
-
-      {/* Current video: on top (zIndex 3), fades out on transition */}
-      {currentSlide.type === "video" && (
-        <div
-          key={`video-${currentIndex}`}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 3,
-            opacity: fadingOut ? 0 : 1,
-            transition: `opacity ${FADE_DURATION}ms ease-in-out`,
-          }}
-        >
-          <video
-            ref={videoRef}
-            src={currentSlide.href}
-            muted
-            playsInline
-            style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
-          />
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 };
