@@ -39,8 +39,15 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   }, [location]);
 
   // Navigation
+  const slideCountRef = useRef(0);
+
   const goToNext = useCallback(() => {
     if (slides.length <= 1) return;
+    slideCountRef.current++;
+    if (slideCountRef.current >= 100) {
+      window.location.reload();
+      return;
+    }
     setCurrentIndex((i) => (i + 1) % slides.length);
   }, [slides.length]);
 
