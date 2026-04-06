@@ -16,14 +16,16 @@ const IMAGE_DURATION = 10_000;
 const VIDEO_TIMEOUT = 5 * 60_000;
 const HEARTBEAT_INTERVAL = 60_000;
 const RELOAD_AFTER = 100;
+const FADE_DURATION = 500;
 
 const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [fadingOut, setFadingOut] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const preloadRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef(0);
   const slideCountRef = useRef(0);
+  const pendingIndexRef = useRef<number | null>(null);
 
   // Fetch slides on mount
   useEffect(() => {
@@ -41,6 +43,18 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       .catch(() => {});
   }, [location]);
 
+  // Transition: fade out current, then switch index
+  const transitionTo = useCallback((nextIndex: number) => {
+    if (fadingOut) return;
+    pendingIndexRef.current = nextIndex;
+    setFadingOut(true);
+    setTimeout(() => {
+      setCurrentIndex(nextIndex);
+      setFadingOut(false);
+      pendingIndexRef.current = null;
+    }, FADE_DURATION);
+  }, [fadingOut]);
+
   // Navigation
   const goToNext = useCallback(() => {
     if (slides.length <= 1) return;
@@ -49,13 +63,15 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       window.location.reload();
       return;
     }
-    setCurrentIndex((i) => (i + 1) % slides.length);
-  }, [slides.length]);
+    const next = (currentIndex + 1) % slides.length;
+    transitionTo(next);
+  }, [slides.length, currentIndex, transitionTo]);
 
   const goToPrev = useCallback(() => {
     if (slides.length <= 1) return;
-    setCurrentIndex((i) => (i === 0 ? slides.length - 1 : i - 1));
-  }, [slides.length]);
+    const prev = currentIndex === 0 ? slides.length - 1 : currentIndex - 1;
+    transitionTo(prev);
+  }, [slides.length, currentIndex, transitionTo]);
 
   // Heartbeat
   useEffect(() => {
@@ -94,7 +110,6 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     video.addEventListener("error", onError);
     video.play().catch(() => goToNext());
 
-    // Safety timeout: skip stuck videos (not for single-video loop)
     let safety: ReturnType<typeof setTimeout> | null = null;
     if (slides.length > 1) {
       safety = setTimeout(goToNext, VIDEO_TIMEOUT);
@@ -109,18 +124,6 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
       video.load();
     };
   }, [currentIndex, slides, goToNext]);
-
-  // Cleanup preload element when it's no longer needed
-  useEffect(() => {
-    return () => {
-      const preload = preloadRef.current;
-      if (preload) {
-        preload.pause();
-        preload.removeAttribute("src");
-        preload.load();
-      }
-    };
-  }, [currentIndex]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -148,7 +151,6 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [slides.length, goToNext, goToPrev]);
 
-  // No slides — show logo
   if (slides.length === 0) {
     return (
       <div className="hide-cursor w-full h-screen bg-black overflow-hidden flex items-center justify-center">
@@ -161,23 +163,19 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   }
 
   const currentSlide = slides[currentIndex];
-  const nextIndex = (currentIndex + 1) % slides.length;
+  const nextIndex = pendingIndexRef.current ?? (currentIndex + 1) % slides.length;
   const nextSlide = slides.length > 1 ? slides[nextIndex] : null;
 
   return (
     <div
       className="hide-cursor w-full h-screen bg-black overflow-hidden"
-      onTouchStart={(e) => {
-        touchStartX.current = e.touches[0].clientX;
-      }}
+      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
       onTouchEnd={(e) => {
         const diff = touchStartX.current - e.changedTouches[0].clientX;
-        if (Math.abs(diff) > 50) {
-          diff > 0 ? goToNext() : goToPrev();
-        }
+        if (Math.abs(diff) > 50) { diff > 0 ? goToNext() : goToPrev(); }
       }}
     >
-      {/* Images: all in DOM, toggle visibility via opacity transition */}
+      {/* Images: all in DOM, crossfade via opacity */}
       {slides.map((slide, index) =>
         slide.type === "image" ? (
           <div
@@ -185,8 +183,8 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
             style={{
               position: "absolute",
               inset: 0,
-              opacity: index === currentIndex ? 1 : 0,
-              transition: "opacity 0.5s ease-in-out",
+              opacity: index === currentIndex && !fadingOut ? 1 : 0,
+              transition: `opacity ${FADE_DURATION}ms ease-in-out`,
               zIndex: index === currentIndex ? 1 : 0,
             }}
           >
@@ -199,9 +197,31 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
         ) : null,
       )}
 
-      {/* Video: only current, mounted/unmounted via key */}
+      {/* Next video: preloading underneath (zIndex 2) */}
+      {nextSlide?.type === "video" && nextIndex !== currentIndex && (
+        <div key={`next-video-${nextIndex}`} style={{ position: "absolute", inset: 0, zIndex: 2 }}>
+          <video
+            src={nextSlide.href}
+            preload="auto"
+            muted
+            playsInline
+            style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
+          />
+        </div>
+      )}
+
+      {/* Current video: on top (zIndex 3), fades out on transition */}
       {currentSlide.type === "video" && (
-        <div key={`video-${currentIndex}`} style={{ position: "absolute", inset: 0, zIndex: 2 }}>
+        <div
+          key={`video-${currentIndex}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 3,
+            opacity: fadingOut ? 0 : 1,
+            transition: `opacity ${FADE_DURATION}ms ease-in-out`,
+          }}
+        >
           <video
             ref={videoRef}
             src={currentSlide.href}
@@ -210,18 +230,6 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
             style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" }}
           />
         </div>
-      )}
-
-      {/* Preload next video (hidden, just buffering) */}
-      {nextSlide?.type === "video" && nextIndex !== currentIndex && (
-        <video
-          ref={preloadRef}
-          key={`preload-${nextIndex}`}
-          src={nextSlide.href}
-          preload="auto"
-          muted
-          style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
-        />
       )}
     </div>
   );
