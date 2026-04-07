@@ -14,13 +14,14 @@ const LocationSelectionView: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  function selectLocation(location: string) {
-    fetch("/api/set-location", {
+  async function selectLocation(location: string) {
+    const slug = location.toLowerCase();
+    await fetch("/api/set-location", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ location: location.toLowerCase() }),
+      body: JSON.stringify({ location: slug }),
     }).catch(() => {});
-    window.location.href = `/${location.toLowerCase()}`;
+    window.location.href = `/${slug}`;
   }
 
   return (
