@@ -246,13 +246,7 @@ Server (index.ts)
 - Error-Handler: kaputtes Video wird uebersprungen
 - Safety-Timeout: 5 Min fuer stuck Videos
 - Page-Reload nach 100 Slide-Wechseln (frischer Chromium-Renderer)
-
-## Resource Monitoring
-
-Alle 5 Minuten in /tmp/kiosk-server.log:
-```
-14:35:00 [monitor] Bun: 42MB RSS, 18MB Heap | Chrome: 312MB
-```
+- Einzelnes Video: wird dupliziert (2 Slides gleicher Datei) damit Crossfade/Counter/Preload funktionieren
 
 ## Known Issues
 
@@ -285,6 +279,17 @@ Fix: Bilder immer im DOM halten (kein Re-Decode), Page-Reload nach 100 Slides,
 Entgegen der Dokumentation ist `xdotool` auf Raspberry Pi OS mit labwc Desktop
 NICHT vorinstalliert. `wtype` und `swayidle` muessen per `apt install` nachinstalliert
 werden (erledigt `scripts/install.ts::setupCursorHide()`).
+
+### Bun.spawn stdin Default ist "inherit"
+`Bun.spawn()` vererbt standardmaessig stdin vom Parent-Prozess. Wenn ein Script
+`readline` nutzt und gleichzeitig Child-Prozesse spawnt (z.B. `nmcli`, `sudo`),
+koennen die Child-Prozesse stdin-Bytes stehlen → readline haengt.
+Fix: Immer `stdin: "ignore"` bei Shell-Aufrufen in interaktiven Scripts setzen.
+
+### Location-Wechsel: fetch muss geawaitet werden
+`window.location.href = ...` nach einem fire-and-forget `fetch()` bricht den
+Request ab, weil der Browser sofort navigiert. Der Server bekommt den Request nie.
+Fix: `await fetch(...)` bevor navigiert wird.
 
 ### Maus-Cursor verstecken auf labwc/Wayland
 `unclutter` / `unclutter-xfixes` funktionieren **nicht** auf labwc (wlroots-basiert) —
