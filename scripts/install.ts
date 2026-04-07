@@ -127,12 +127,26 @@ async function setupKeyboard() {
 
 async function setupResolution() {
   console.log("[*] Setze Aufloesung auf 1080p...");
-  if (await fileContains(BOOT_CONFIG, "hdmi_group=1")) {
-    console.log("[i] HDMI bereits konfiguriert");
+  const kanshiDir = `${process.env.HOME}/.config/kanshi`;
+  const kanshiConfig = `${kanshiDir}/config`;
+
+  if (await fileContains(kanshiConfig, "1920x1080")) {
+    console.log("[i] 1080p bereits konfiguriert");
     return;
   }
-  await appendToFile(BOOT_CONFIG, "hdmi_group=1\\nhdmi_mode=16");
-  console.log("[OK] Aufloesung: 1080p");
+
+  await shellRun(`mkdir -p ${kanshiDir}`);
+  // kanshi is the display config daemon on Pi OS Bookworm with labwc.
+  // Legacy hdmi_group/hdmi_mode in config.txt are ignored on Pi 4/5.
+  const config = `profile {
+    output HDMI-A-1 mode 1920x1080@60.000Hz position 0,0 transform normal
+}
+profile {
+    output HDMI-A-2 mode 1920x1080@60.000Hz position 0,0 transform normal
+}
+`;
+  await Bun.write(kanshiConfig, config);
+  console.log("[OK] Aufloesung: 1080p (via kanshi, wirkt nach Reboot)");
 }
 
 async function disableTranslate() {
