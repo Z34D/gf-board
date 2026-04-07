@@ -24,6 +24,7 @@ function ask(question: string): Promise<string> {
 
 async function shell(cmd: string): Promise<{ code: number; stdout: string }> {
   const proc = Bun.spawn(["bash", "-c", cmd], {
+    stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -34,6 +35,7 @@ async function shell(cmd: string): Promise<{ code: number; stdout: string }> {
 
 async function shellRun(cmd: string): Promise<boolean> {
   const proc = Bun.spawn(["bash", "-c", cmd], {
+    stdin: "ignore",
     stdout: "inherit",
     stderr: "inherit",
   });
