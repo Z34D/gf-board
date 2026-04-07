@@ -95,13 +95,16 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
     fetch(`/api/files/${location}`)
       .then((r) => r.json() as Promise<{ files: MediaFile[] }>)
       .then((data) => {
-        setSlides(
-          (data.files ?? []).map((f) => ({
-            href: `/media/${location}/${f.name}`,
-            type: f.type,
-            name: f.name,
-          })),
-        );
+        let mapped = (data.files ?? []).map((f) => ({
+          href: `/media/${location}/${f.name}`,
+          type: f.type,
+          name: f.name,
+        }));
+        // Single video: duplicate so crossfade/counter/preload all work
+        if (mapped.length === 1 && mapped[0].type === "video") {
+          mapped = [mapped[0], { ...mapped[0], name: mapped[0].name + "_dup" }];
+        }
+        setSlides(mapped);
       })
       .catch(() => {});
   }, [location]);
