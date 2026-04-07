@@ -130,14 +130,10 @@ async function setupResolution() {
   const kanshiDir = `${process.env.HOME}/.config/kanshi`;
   const kanshiConfig = `${kanshiDir}/config`;
 
-  if (await fileContains(kanshiConfig, "1920x1080")) {
-    console.log("[i] 1080p bereits konfiguriert");
-    return;
-  }
-
   await shellRun(`mkdir -p ${kanshiDir}`);
   // kanshi is the display config daemon on Pi OS Bookworm with labwc.
   // Legacy hdmi_group/hdmi_mode in config.txt are ignored on Pi 4/5.
+  // Profiles for both HDMI ports so it works regardless of which one is used.
   const config = `profile {
     output HDMI-A-1 mode 1920x1080@60.000Hz position 0,0 transform normal
 }
