@@ -24,6 +24,23 @@ DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 lxterminal --title="GF-Kiosk" -e bash -c 't
 # Wait for desktop to be fully loaded
 sleep 10
 
+# Ensure 1080p resolution via kanshi (idempotent)
+KANSHI_DIR="$HOME/.config/kanshi"
+KANSHI_CONFIG="$KANSHI_DIR/config"
+if ! grep -q "1920x1080" "$KANSHI_CONFIG" 2>/dev/null; then
+    mkdir -p "$KANSHI_DIR"
+    cat > "$KANSHI_CONFIG" << 'EOF'
+profile {
+    output HDMI-A-1 mode 1920x1080@60.000Hz position 0,0 transform normal
+}
+profile {
+    output HDMI-A-2 mode 1920x1080@60.000Hz position 0,0 transform normal
+}
+EOF
+    # Restart kanshi to apply
+    pkill -HUP kanshi 2>/dev/null || true
+fi
+
 # Run update (safe -- always exits 0)
 bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
 
