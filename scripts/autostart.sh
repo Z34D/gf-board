@@ -1,8 +1,8 @@
 #!/bin/bash
 # GF-Kiosk Autostart -- called by labwc on desktop login
 # 1. Waits for desktop
-# 2. Ensures system config (idempotent)
-# 3. Runs update (safe, never blocks)
+# 2. Git update (gets latest code + hotfixes)
+# 3. System config (idempotent, runs latest version)
 # 4. Starts server in a crash-recovery loop
 
 # Navigate to repo root (parent of scripts/)
@@ -25,11 +25,11 @@ DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 lxterminal --title="GF-Kiosk" -e bash -c 't
 # Wait for desktop to be fully loaded
 sleep 10
 
-# System config (idempotent, hotfixable via git push)
-bash scripts/ensure-system.sh
-
-# Run update (safe -- always exits 0)
+# Git update first (safe -- always exits 0)
 bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
+
+# System config (idempotent, now runs the latest version from git)
+bash scripts/ensure-system.sh
 
 # Start server in a loop (crash recovery)
 while true; do
