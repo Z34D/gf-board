@@ -1,18 +1,8 @@
-import React, { useEffect } from "react";
+import React from "react";
 
 const LOCATIONS = ["Flieden", "Neuhof", "Gersfeld", "Schlitz", "Eichenzell"];
 
 const LocationSelectionView: React.FC = () => {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "q" || e.key === "Q")) {
-        e.preventDefault();
-        fetch("/api/kill-kiosk", { method: "POST" }).catch(() => {});
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   async function selectLocation(location: string) {
     const slug = location.toLowerCase();

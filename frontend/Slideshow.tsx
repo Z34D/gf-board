@@ -162,11 +162,6 @@ const Slideshow: React.FC<{ location: string }> = ({ location }) => {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === "q" || e.key === "Q")) {
-        e.preventDefault();
-        fetch("/api/kill-kiosk", { method: "POST" }).catch(() => {});
-        return;
-      }
       if (e.key === "l" || e.key === "L") {
         e.preventDefault();
         window.location.href = "/";
