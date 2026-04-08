@@ -2,16 +2,14 @@
 /**
  * Raspberry Pi Kiosk Setup Script
  *
- * Interactive terminal — prompts for WLAN, PIN etc.
- * Idempotent: safe to run multiple times.
- * Run: bun run setup
+ * Interactive terminal — prompts for WLAN, API keys etc.
+ * Run once on fresh Pi: bun run setup
+ * System config (resolution, keybinds, WLAN) is handled by ensure-system.sh
  */
 
 const KIOSK_DIR = process.cwd();
 const AUTOSTART_DIR = `${process.env.HOME}/.config/labwc`;
 const AUTOSTART_FILE = `${AUTOSTART_DIR}/autostart`;
-const RC_XML_FILE = `${AUTOSTART_DIR}/rc.xml`;
-const BOOT_CONFIG = "/boot/firmware/config.txt";
 
 // --- Helpers ---
 
@@ -41,20 +39,6 @@ async function shellRun(cmd: string): Promise<boolean> {
   });
   const code = await proc.exited;
   return code === 0;
-}
-
-async function fileContains(path: string, needle: string): Promise<boolean> {
-  try {
-    const content = await Bun.file(path).text();
-    return content.includes(needle);
-  } catch {
-    return false;
-  }
-}
-
-async function appendToFile(path: string, content: string): Promise<void> {
-  const escaped = content.replace(/'/g, "'\\''");
-  await shellRun(`printf '%b\\n' '${escaped}' | sudo tee -a ${path} > /dev/null`);
 }
 
 // --- Setup Steps ---
@@ -110,60 +94,20 @@ async function setupKeyboard() {
   }
 }
 
-async function setupResolution() {
-  console.log("[*] Setze Aufloesung auf 1080p...");
-  const kanshiDir = `${process.env.HOME}/.config/kanshi`;
-  const kanshiConfig = `${kanshiDir}/config`;
-
-  await shellRun(`mkdir -p ${kanshiDir}`);
-  // kanshi is the display config daemon on Pi OS Bookworm with labwc.
-  // Legacy hdmi_group/hdmi_mode in config.txt are ignored on Pi 4/5.
-  // Profiles for both HDMI ports so it works regardless of which one is used.
-  const config = `profile {
-    output HDMI-A-1 mode 1920x1080@60.000Hz position 0,0 transform normal
-}
-profile {
-    output HDMI-A-2 mode 1920x1080@60.000Hz position 0,0 transform normal
-}
-`;
-  await Bun.write(kanshiConfig, config);
-  console.log("[OK] Aufloesung: 1080p (via kanshi, wirkt nach Reboot)");
-}
-
-async function disableTranslate() {
-  console.log("[*] Deaktiviere Chromium-Uebersetzung...");
-  await shellRun("sudo mkdir -p /etc/chromium/policies/managed");
-  await shellRun(
-    `echo '{ "TranslateEnabled": false }' | sudo tee /etc/chromium/policies/managed/no-translate.json > /dev/null`,
-  );
-  console.log("[OK] Chromium-Uebersetzung deaktiviert");
-}
-
-async function disableScreensaver() {
-  console.log("[*] Deaktiviere Screensaver/Blanking...");
-  const profile = `${process.env.HOME}/.profile`;
-  if (await fileContains(profile, "xset s off")) {
-    console.log("[i] Screensaver bereits deaktiviert");
-    return;
-  }
-
-  const lines = [
-    "",
-    "# Disable screen blanking for kiosk",
-    "xset s off 2>/dev/null || true",
-    "xset -dpms 2>/dev/null || true",
-    "xset s noblank 2>/dev/null || true",
-  ].join("\n");
-  const existing = await Bun.file(profile).text().catch(() => "");
-  await Bun.write(profile, existing + lines + "\n");
-  console.log("[OK] Screensaver deaktiviert");
-}
-
 async function disableAutoUpdates() {
   console.log("[*] Deaktiviere automatische Updates...");
   await shell("sudo systemctl disable --now unattended-upgrades.service 2>/dev/null || true");
   await shell("sudo systemctl mask unattended-upgrades.service 2>/dev/null || true");
   console.log("[OK] Auto-Updates deaktiviert");
+}
+
+async function installDependencies() {
+  console.log("[*] Installiere System-Pakete (wtype, swayidle)...");
+  if (!await shellRun("sudo apt-get install -y --no-install-recommends wtype swayidle")) {
+    console.log("[!] Pakete konnten nicht installiert werden (ueberspringe)");
+  } else {
+    console.log("[OK] System-Pakete installiert");
+  }
 }
 
 async function setupAutostart() {
@@ -172,41 +116,11 @@ async function setupAutostart() {
 
   const autostart = [
     `bash ${KIOSK_DIR}/scripts/autostart.sh &`,
-    // Hide mouse cursor after 5s idle (triggers labwc's HideCursor action via wtype).
-    // Cursor reappears automatically on pointer movement (labwc built-in behavior).
     `swayidle -w timeout 5 'wtype -M alt -M logo -k h' &`,
     "",
   ].join("\n");
   await Bun.write(AUTOSTART_FILE, autostart);
   console.log("[OK] Autostart konfiguriert");
-}
-
-async function setupCursorHide() {
-  console.log("[*] Installiere Cursor-Hide Tools (wtype, swayidle)...");
-  if (!await shellRun("sudo apt-get install -y --no-install-recommends wtype swayidle")) {
-    console.log("[!] wtype/swayidle konnten nicht installiert werden (ueberspringe)");
-    return;
-  }
-
-  console.log("[*] Schreibe labwc rc.xml mit HideCursor-Keybind...");
-  await shellRun(`mkdir -p ${AUTOSTART_DIR}`);
-  const rcXml = `<?xml version="1.0"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc">
-  <core>
-    <xwaylandPersistence>yes</xwaylandPersistence>
-  </core>
-  <keyboard>
-    <keybind key="A-W-h">
-      <action name="HideCursor"/>
-    </keybind>
-    <keybind key="A-q">
-      <action name="Execute"><command>curl -s -X POST http://localhost:3000/api/kill-kiosk</command></action>
-    </keybind>
-  </keyboard>
-</openbox_config>
-`;
-  await Bun.write(RC_XML_FILE, rcXml);
-  console.log("[OK] Cursor-Hide konfiguriert (5s Idle -> weg, Maus-Bewegung -> zurueck)");
 }
 
 async function setupEnv() {
@@ -231,13 +145,14 @@ async function main() {
   await setupWlan();
   await setupAutoLogin();
   await setupKeyboard();
-  await setupResolution();
-  await disableTranslate();
-  await disableScreensaver();
   await disableAutoUpdates();
-  await setupCursorHide();
+  await installDependencies();
   await setupAutostart();
   await setupEnv();
+
+  // Run ensure-system.sh to apply system config immediately
+  console.log("\n[*] Wende System-Konfiguration an...");
+  await shellRun("bash scripts/ensure-system.sh");
 
   console.log(`
 === Setup abgeschlossen! ===

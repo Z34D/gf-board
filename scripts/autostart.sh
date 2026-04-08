@@ -1,8 +1,9 @@
 #!/bin/bash
 # GF-Kiosk Autostart -- called by labwc on desktop login
 # 1. Waits for desktop
-# 2. Runs update (safe, never blocks)
-# 3. Starts server in a crash-recovery loop
+# 2. Ensures system config (idempotent)
+# 3. Runs update (safe, never blocks)
+# 4. Starts server in a crash-recovery loop
 
 # Navigate to repo root (parent of scripts/)
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,54 +25,8 @@ DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 lxterminal --title="GF-Kiosk" -e bash -c 't
 # Wait for desktop to be fully loaded
 sleep 10
 
-# Ensure 1080p resolution via kanshi (only if not already 1080p)
-CURRENT_RES=$(wlr-randr 2>/dev/null | grep -oP '\d+x\d+.*\(current\)' | grep -oP '^\d+x\d+')
-if [ "$CURRENT_RES" != "1920x1080" ]; then
-    KANSHI_DIR="$HOME/.config/kanshi"
-    KANSHI_CONFIG="$KANSHI_DIR/config"
-    mkdir -p "$KANSHI_DIR"
-    cat > "$KANSHI_CONFIG" << 'EOF'
-profile {
-    output HDMI-A-1 mode 1920x1080@60.000Hz position 0,0 transform normal
-}
-profile {
-    output HDMI-A-2 mode 1920x1080@60.000Hz position 0,0 transform normal
-}
-EOF
-    pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
-fi
-
-# Ensure labwc keybinds are up to date (Alt+Q kill kiosk, Alt+Super+H hide cursor)
-LABWC_RC="$HOME/.config/labwc/rc.xml"
-if ! grep -q 'kill-kiosk' "$LABWC_RC" 2>/dev/null; then
-    mkdir -p "$HOME/.config/labwc"
-    cat > "$LABWC_RC" << 'EOF'
-<?xml version="1.0"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc">
-  <core>
-    <xwaylandPersistence>yes</xwaylandPersistence>
-  </core>
-  <keyboard>
-    <keybind key="A-W-h">
-      <action name="HideCursor"/>
-    </keybind>
-    <keybind key="A-q">
-      <action name="Execute"><command>curl -s -X POST http://localhost:3000/api/kill-kiosk</command></action>
-    </keybind>
-  </keyboard>
-</openbox_config>
-EOF
-    labwc --reconfigure 2>/dev/null || true
-fi
-
-# Ensure WLAN is activated (NM persists wifi-off state across reboots)
-nmcli radio wifi on 2>/dev/null || true
-sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
-
-# If USB-WLAN dongle present, disconnect onboard WLAN (avoid routing conflicts)
-if readlink -f /sys/class/net/wlan1 2>/dev/null | grep -q usb; then
-    nmcli device disconnect wlan0 2>/dev/null || true
-fi
+# System config (idempotent, hotfixable via git push)
+bash scripts/ensure-system.sh
 
 # Run update (safe -- always exits 0)
 bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
