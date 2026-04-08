@@ -41,6 +41,11 @@ EOF
     pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
 fi
 
+# If USB-WLAN dongle present, disconnect onboard WLAN (avoid routing conflicts)
+if readlink -f /sys/class/net/wlan1 2>/dev/null | grep -q usb; then
+    nmcli device disconnect wlan0 2>/dev/null || true
+fi
+
 # Run update (safe -- always exits 0)
 bash scripts/update.sh 2>&1 | tee /tmp/kiosk-update.log
 

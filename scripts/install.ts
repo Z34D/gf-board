@@ -91,21 +91,6 @@ async function setupWlan() {
   console.log("[OK] WLAN verbunden");
 }
 
-async function preferUsbWlan() {
-  // Nur deaktivieren wenn wlan1 ein echtes USB-Gerät ist
-  const { stdout } = await shell("readlink -f /sys/class/net/wlan1 2>/dev/null");
-  if (!stdout || !stdout.includes("/usb")) return;
-
-  console.log("[*] USB-WLAN (wlan1) erkannt -- deaktiviere onboard WLAN...");
-  if (await fileContains(BOOT_CONFIG, "dtoverlay=disable-wifi")) {
-    console.log("[i] Onboard WLAN bereits deaktiviert");
-    return;
-  }
-
-  await appendToFile(BOOT_CONFIG, "dtoverlay=disable-wifi");
-  console.log("[OK] Onboard WLAN wird nach Reboot deaktiviert (USB-WLAN uebernimmt)");
-}
-
 async function setupAutoLogin() {
   console.log("[*] Aktiviere Auto-Login...");
   const user = process.env.USER || "pi";
@@ -241,7 +226,6 @@ async function main() {
   console.log("\n=== GF-Kiosk Raspberry Pi Setup ===\n");
 
   await setupWlan();
-  await preferUsbWlan();
   await setupAutoLogin();
   await setupKeyboard();
   await setupResolution();
