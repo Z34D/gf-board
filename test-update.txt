@@ -1,0 +1,2 @@
+Auto-Update Test - 2026-04-08
+Wenn diese Datei auf dem Pi erscheint, funktioniert das Auto-Update.
