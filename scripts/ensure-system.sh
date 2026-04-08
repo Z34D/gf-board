@@ -39,7 +39,7 @@ cat > "$LABWC_DIR/rc.xml" << 'EOF'
   </keyboard>
 </openbox_config>
 EOF
-labwc --reconfigure 2>/dev/null || true
+pkill -HUP labwc 2>/dev/null || true
 
 # --- WLAN ---
 # Ensure wifi radio is on (NM persists off-state across reboots)
@@ -69,3 +69,5 @@ xset -dpms 2>/dev/null || true
 xset s noblank 2>/dev/null || true
 EOF
 fi
+
+exit 0
