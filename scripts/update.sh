@@ -4,7 +4,44 @@
 set -o pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REMOTE_URL="https://github.com/Z34D/gf-board.git"
+
 cd "$REPO_DIR" || exit 0
+
+# --- Repo integrity check ---
+# git reset --hard is not crash-safe. If the Pi loses power mid-reset,
+# .git/objects can end up empty/corrupt. Detect this and re-clone.
+if ! git rev-parse HEAD >/dev/null 2>&1 || ! git fsck --no-dangling --connectivity-only 2>/dev/null; then
+    echo "[update] Git repo corrupt — re-cloning..."
+    # Preserve local-only files
+    cp "$REPO_DIR/.env" /tmp/gf-board-env-backup 2>/dev/null || true
+    cp "$REPO_DIR/config.json" /tmp/gf-board-config-backup 2>/dev/null || true
+    cp -r "$REPO_DIR/media" /tmp/gf-board-media-backup 2>/dev/null || true
+    # Clone to tmp first, then swap (avoids deleting CWD under running script)
+    TMPCLONE="/tmp/gf-board-reclone"
+    rm -rf "$TMPCLONE"
+    if ! timeout 60 git clone "$REMOTE_URL" "$TMPCLONE" 2>/dev/null; then
+        echo "[update] Re-clone failed — cannot recover"
+        rm -rf "$TMPCLONE"
+        exit 0
+    fi
+    # Swap: remove corrupt, move fresh clone in place
+    rm -rf "$REPO_DIR"
+    mv "$TMPCLONE" "$REPO_DIR"
+    cd "$REPO_DIR" || exit 0
+    # Restore local files
+    cp /tmp/gf-board-env-backup "$REPO_DIR/.env" 2>/dev/null || true
+    cp /tmp/gf-board-config-backup "$REPO_DIR/config.json" 2>/dev/null || true
+    if [ -d /tmp/gf-board-media-backup ]; then
+        mkdir -p "$REPO_DIR/media"
+        cp -r /tmp/gf-board-media-backup/* "$REPO_DIR/media/" 2>/dev/null || true
+        rm -rf /tmp/gf-board-media-backup
+    fi
+    rm -f /tmp/gf-board-env-backup /tmp/gf-board-config-backup
+    echo "[update] Repo recovered via re-clone"
+    timeout 120 bun install 2>/dev/null || true
+    exit 0
+fi
 
 echo "[update] Checking for updates..."
 

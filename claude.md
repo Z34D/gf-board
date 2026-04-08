@@ -39,7 +39,8 @@ gf-board/
 │   ├── setup.sh                 # Erstinstallation (Bun + Dependencies + Setup)
 │   ├── install.ts               # Interaktives Pi-Setup (WLAN, Autostart, .env)
 │   ├── autostart.sh             # labwc Autostart (Update + Crash-Recovery-Loop)
-│   └── update.sh                # Git Auto-Update bei Neustart
+│   ├── ensure-system.sh         # Idempotente System-Config (labwc, WLAN, Bun PATH)
+│   └── update.sh                # Git Auto-Update bei Neustart (mit Crash-Recovery)
 ├── package.json                 # Kiosk Dependencies (react, croner)
 ├── bunfig.toml                  # Bun Tailwind Plugin
 ├── .gitignore
@@ -67,6 +68,9 @@ Raspberry Pi
 │
 └── scripts/autostart.sh (labwc)
     ├── update.sh → git fetch + reset --hard (safe, exit 0 immer)
+    │   └── Bei korruptem Repo: auto Re-Clone + Restore (.env, config, media)
+    ├── ensure-system.sh → labwc Keybinds, WLAN, Bun PATH, Screen Blanking
+    │   └── Idempotent, kann per git push gehotfixt werden
     └── while true: bun run start (Crash-Recovery-Loop)
 
     ↓ HTTPS (Google Drive API direkt)
@@ -249,6 +253,41 @@ Server (index.ts)
 - Einzelnes Video: wird dupliziert (2 Slides gleicher Datei) damit Crossfade/Counter/Preload funktionieren
 
 ## Known Issues
+
+### Git Repo Corruption nach Stromausfall
+`git reset --hard` in `update.sh` ist nicht crash-safe. Wenn der Pi waehrend
+eines `git reset --hard` Strom verliert (oder der Desktop durch `pkill labwc`
+abstuerzt), werden `.git/objects` halb geschrieben → korruptes Repo → alle
+getrackte Dateien sind 0 Bytes → Server startet nicht.
+Fix: `update.sh` prueft bei jedem Boot mit `git rev-parse HEAD` + `git fsck`
+ob das Repo intakt ist. Bei Korruption: automatischer Re-Clone nach `/tmp`,
+dann Swap. `.env`, `config.json` und `media/` werden gesichert und
+wiederhergestellt. Clone nach `/tmp` statt direktes `rm -rf` des Repo-Dir,
+weil das Script sich sonst sein eigenes CWD unter den Fuessen wegloescht.
+
+### Bun PATH geht nach Re-Clone verloren
+Bun's Installer schreibt den PATH in `.bashrc`, aber nach einem Re-Clone
+(oder wenn `.bashrc` ueberschrieben wird) fehlt der Eintrag.
+Fix: `ensure-system.sh` prueft idempotent ob `BUN_INSTALL` in `.bashrc`
+steht und traegt es ein wenn nicht.
+
+### labwc HideCursor greift nicht nach Config-Reload
+Nach `pkill -HUP labwc` (Config-Reload) wird die `rc.xml` neu geladen,
+aber `swayidle` hat den `HideCursor` Keybind noch nicht neu getriggert.
+Der Cursor bleibt sichtbar bis zum naechsten manuellen `wtype`-Aufruf.
+Fix: `ensure-system.sh` startet `swayidle` nach dem `rc.xml`-Schreiben
+neu (`pkill swayidle; swayidle ... &`), damit der Cursor sofort nach
+5s Idle verschwindet.
+
+### ensure-system.sh darf NIEMALS pkill labwc oder pkill kanshi ohne Restart ausfuehren
+Fruehe Versionen von `ensure-system.sh` haben `pkill labwc` ausgefuehrt,
+was den gesamten Desktop (und damit Chromium, Terminal, alles) abschiessen
+laesst. Das fuehrte zu einem Crash-Loop und in Kombination mit `update.sh`
+zur Git-Repo-Korruption (siehe oben).
+Regeln:
+- labwc Config-Reload: `pkill -HUP labwc` (SIGHUP, kein Kill)
+- kanshi Restart: `pkill kanshi; sleep 0.5; kanshi &` (nur kanshi, nicht labwc)
+- NIEMALS `pkill labwc` in einem Script das beim Boot laeuft
 
 ### Chromium "Aw, Snap!" Error 5
 Out of memory nach Wochen Betrieb.

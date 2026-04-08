@@ -40,6 +40,11 @@ cat > "$LABWC_DIR/rc.xml" << 'EOF'
 </openbox_config>
 EOF
 
+# Reload labwc config and restart swayidle so HideCursor works immediately
+pkill -HUP labwc 2>/dev/null || true
+pkill swayidle 2>/dev/null || true
+swayidle -w timeout 5 'wtype -M alt -M logo -k h' &
+
 # --- WLAN ---
 # Ensure wifi radio is on (NM persists off-state across reboots)
 nmcli radio wifi on 2>/dev/null || true
@@ -47,15 +52,34 @@ nmcli radio wifi on 2>/dev/null || true
 sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
 # --- USB-WLAN preference ---
-# If USB dongle present, disconnect onboard to avoid routing conflicts
+# If USB dongle present: use it, disable onboard. Otherwise: ensure onboard is active.
 if readlink -f /sys/class/net/wlan1 2>/dev/null | grep -q usb; then
+    # USB dongle found — disable onboard to avoid routing conflicts
     nmcli device disconnect wlan0 2>/dev/null || true
+    nmcli device set wlan0 managed no 2>/dev/null || true
+    # Ensure USB dongle is managed and auto-connects
+    nmcli device set wlan1 managed yes 2>/dev/null || true
+    nmcli device set wlan1 autoconnect yes 2>/dev/null || true
+else
+    # No USB dongle — ensure onboard wifi is managed and auto-connects
+    nmcli device set wlan0 managed yes 2>/dev/null || true
+    nmcli device set wlan0 autoconnect yes 2>/dev/null || true
 fi
 
 # --- Chromium translate policy ---
 if [ ! -f /etc/chromium/policies/managed/no-translate.json ]; then
     sudo mkdir -p /etc/chromium/policies/managed
     echo '{ "TranslateEnabled": false }' | sudo tee /etc/chromium/policies/managed/no-translate.json > /dev/null
+fi
+
+# --- Bun PATH ---
+if ! grep -q 'BUN_INSTALL' "$HOME/.bashrc" 2>/dev/null; then
+    cat >> "$HOME/.bashrc" << 'EOF'
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+EOF
 fi
 
 # --- Screen blanking ---
