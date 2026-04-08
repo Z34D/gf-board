@@ -9,6 +9,14 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    document.addEventListener("keydown", function(e) {
+      if (e.altKey && (e.key === "q" || e.key === "Q")) {
+        e.preventDefault();
+        fetch("/api/kill-kiosk", { method: "POST" }).catch(function(){});
+      }
+    });
+  </script>
   <script type="module" src="./app.tsx"></script>
 </body>
 </html>
