@@ -41,7 +41,7 @@ EOF
     pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
 fi
 
-# Remove legacy disable-wifi from config.txt (old setup script wrote this permanently)
+# Ensure onboard WLAN is not permanently disabled
 sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
 # If USB-WLAN dongle present, disconnect onboard WLAN (avoid routing conflicts)
