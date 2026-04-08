@@ -18,7 +18,7 @@ profile {
     output HDMI-A-2 mode 1920x1080@60.000Hz position 0,0 transform normal
 }
 EOF
-    pkill -HUP kanshi 2>/dev/null || true
+    pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
 fi
 
 # --- labwc keybinds (Alt+Q kill kiosk, Alt+Super+H hide cursor) ---
