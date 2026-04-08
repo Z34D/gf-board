@@ -77,7 +77,7 @@ async function setupWlan() {
   await shell(`nmcli con delete '${safeSsid}' 2>/dev/null`);
 
   if (!await shellRun(
-    `nmcli con add type wifi con-name '${safeSsid}' ssid '${safeSsid}' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${safePassword}'`,
+    `nmcli con add type wifi con-name '${safeSsid}' ssid '${safeSsid}' ifname '*' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${safePassword}'`,
   )) {
     console.log("[ERR] WLAN-Verbindung konnte nicht erstellt werden");
     return;
