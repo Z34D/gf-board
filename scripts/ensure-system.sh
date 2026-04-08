@@ -52,18 +52,30 @@ nmcli radio wifi on 2>/dev/null || true
 sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
 # --- USB-WLAN preference ---
-# If USB dongle present: use it, disable onboard. Otherwise: ensure onboard is active.
-if readlink -f /sys/class/net/wlan1 2>/dev/null | grep -q usb; then
-    # USB dongle found — disable onboard to avoid routing conflicts
-    nmcli device disconnect wlan0 2>/dev/null || true
-    nmcli device set wlan0 managed no 2>/dev/null || true
-    # Ensure USB dongle is managed and auto-connects
-    nmcli device set wlan1 managed yes 2>/dev/null || true
-    nmcli device set wlan1 autoconnect yes 2>/dev/null || true
-else
-    # No USB dongle — ensure onboard wifi is managed and auto-connects
-    nmcli device set wlan0 managed yes 2>/dev/null || true
-    nmcli device set wlan0 autoconnect yes 2>/dev/null || true
+# Find which adapter is USB and which is onboard (names can be swapped)
+USB_WLAN=""
+ONBOARD_WLAN=""
+for iface in /sys/class/net/wlan*; do
+    name=$(basename "$iface")
+    link=$(readlink -f "$iface" 2>/dev/null)
+    if echo "$link" | grep -q usb; then
+        USB_WLAN="$name"
+    elif echo "$link" | grep -q mmc; then
+        ONBOARD_WLAN="$name"
+    fi
+done
+
+if [ -n "$USB_WLAN" ] && [ -n "$ONBOARD_WLAN" ]; then
+    # Both present — disable onboard, use USB
+    nmcli device disconnect "$ONBOARD_WLAN" 2>/dev/null || true
+    nmcli device set "$ONBOARD_WLAN" managed no 2>/dev/null || true
+    nmcli device set "$USB_WLAN" managed yes 2>/dev/null || true
+elif [ -n "$ONBOARD_WLAN" ]; then
+    # Only onboard — ensure it's active
+    nmcli device set "$ONBOARD_WLAN" managed yes 2>/dev/null || true
+elif [ -n "$USB_WLAN" ]; then
+    # Only USB — ensure it's active
+    nmcli device set "$USB_WLAN" managed yes 2>/dev/null || true
 fi
 
 # --- Chromium translate policy ---
