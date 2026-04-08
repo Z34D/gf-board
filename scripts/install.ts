@@ -199,6 +199,9 @@ async function setupCursorHide() {
     <keybind key="A-W-h">
       <action name="HideCursor"/>
     </keybind>
+    <keybind key="A-q">
+      <action name="Execute"><command>curl -s -X POST http://localhost:3000/api/kill-kiosk</command></action>
+    </keybind>
   </keyboard>
 </openbox_config>
 `;

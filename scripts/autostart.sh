@@ -41,6 +41,29 @@ EOF
     pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
 fi
 
+# Ensure labwc keybinds are up to date (Alt+Q kill kiosk, Alt+Super+H hide cursor)
+LABWC_RC="$HOME/.config/labwc/rc.xml"
+if ! grep -q 'kill-kiosk' "$LABWC_RC" 2>/dev/null; then
+    mkdir -p "$HOME/.config/labwc"
+    cat > "$LABWC_RC" << 'EOF'
+<?xml version="1.0"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <core>
+    <xwaylandPersistence>yes</xwaylandPersistence>
+  </core>
+  <keyboard>
+    <keybind key="A-W-h">
+      <action name="HideCursor"/>
+    </keybind>
+    <keybind key="A-q">
+      <action name="Execute"><command>curl -s -X POST http://localhost:3000/api/kill-kiosk</command></action>
+    </keybind>
+  </keyboard>
+</openbox_config>
+EOF
+    labwc --reconfigure 2>/dev/null || true
+fi
+
 # Ensure WLAN is activated (NM persists wifi-off state across reboots)
 nmcli radio wifi on 2>/dev/null || true
 sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
