@@ -41,10 +41,9 @@ EOF
     pkill kanshi 2>/dev/null; sleep 0.5; kanshi &
 fi
 
-# Ensure WLAN is activated
-sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
-rfkill unblock wifi 2>/dev/null || true
+# Ensure WLAN is activated (NM persists wifi-off state across reboots)
 nmcli radio wifi on 2>/dev/null || true
+sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
 # If USB-WLAN dongle present, disconnect onboard WLAN (avoid routing conflicts)
 if readlink -f /sys/class/net/wlan1 2>/dev/null | grep -q usb; then
