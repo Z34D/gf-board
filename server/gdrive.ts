@@ -90,7 +90,7 @@ async function downloadFile(fileId: string, targetPath: string, expectedSize: nu
 
   const written = Bun.file(targetPath).size;
   if (written !== expectedSize) {
-    log("sync", `✗ Größe falsch: ${path.basename(targetPath)} (${formatSize(written)} statt ${formatSize(expectedSize)})`);
+    log("sync", `✗ Grosse falsch: ${path.basename(targetPath)} (${formatSize(written)} statt ${formatSize(expectedSize)})`);
     try { await Bun.file(targetPath).delete(); } catch {}
     return false;
   }
@@ -166,12 +166,12 @@ export async function syncLocation(
 
   try {
     log("sync", `Gestartet: ${location}`);
-    onProgress?.("Prüfe Internet...");
+    onProgress?.("Pruefe Internet...");
 
     try {
       await fetch("https://1.1.1.1", { method: "HEAD", signal: AbortSignal.timeout(5_000) });
     } catch {
-      log("sync", "Kein Internet — übersprungen");
+      log("sync", "Kein Internet - uebersprungen");
       return { success: false, downloaded: 0, updated: 0, deleted: 0, unchanged: 0, error: "Kein Internet" };
     }
 
@@ -215,15 +215,15 @@ export async function syncLocation(
       return { success: true, downloaded: 0, updated: 0, deleted: 0, unchanged };
     }
 
-    log("sync", `+${toDownload.length} neu, ~${toUpdate.length} geändert, -${toDelete.length} gelöscht, =${unchanged} aktuell`);
+    log("sync", `+${toDownload.length} neu, ~${toUpdate.length} geaendert, -${toDelete.length} geloescht, =${unchanged} aktuell`);
 
     // Delete removed files
     for (const name of toDelete) {
-      onProgress?.(`Lösche ${name}...`);
+      onProgress?.(`Loesche ${name}...`);
       try {
         await Bun.file(path.join(locationDir, name)).delete();
       } catch {
-        log("sync", `✗ Löschen fehlgeschlagen: ${name}`);
+        log("sync", `✗ Loeschen fehlgeschlagen: ${name}`);
       }
     }
 
@@ -242,20 +242,36 @@ export async function syncLocation(
     }
 
     const duration = formatDuration(Date.now() - start);
+    const downloaded = toDownload.length - failed.filter((name) => toDownload.some((file) => file.name === name)).length;
+    const updated = toUpdate.length - failed.filter((name) => toUpdate.some((file) => file.name === name)).length;
 
     if (failed.length > 0) {
+      const usableFiles = await listLocalFiles(mediaDir, location);
+
       log("sync", `✗ Teilweise fehlgeschlagen (${duration}): ${failed.join(", ")}`);
+
+      if (usableFiles.size > 0) {
+        log("sync", `Trotz Fehler benutzbar: ${usableFiles.size} Datei(en) lokal verfuegbar`);
+        return {
+          success: true,
+          downloaded,
+          updated,
+          deleted: toDelete.length,
+          unchanged,
+        };
+      }
+
       return {
         success: false,
-        downloaded: toDownload.length - failed.filter(n => toDownload.some(f => f.name === n)).length,
-        updated: toUpdate.length - failed.filter(n => toUpdate.some(f => f.name === n)).length,
+        downloaded,
+        updated,
         deleted: toDelete.length,
         unchanged,
         error: `Fehlgeschlagen: ${failed.join(", ")}`,
       };
     }
 
-    log("sync", `Fertig (${duration}): +${toDownload.length} neu, ~${toUpdate.length} geändert, -${toDelete.length} gelöscht`);
+    log("sync", `Fertig (${duration}): +${toDownload.length} neu, ~${toUpdate.length} geaendert, -${toDelete.length} geloescht`);
     return { success: true, downloaded: toDownload.length, updated: toUpdate.length, deleted: toDelete.length, unchanged };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
