@@ -45,38 +45,18 @@ pkill -HUP labwc 2>/dev/null || true
 pkill swayidle 2>/dev/null || true
 swayidle -w timeout 5 'wtype -M alt -M logo -k h' &
 
-# --- WLAN ---
-# Ensure wifi radio is on (NM persists off-state across reboots)
+# --- WLAN reset ---
+# Undo common stale states on every boot: rfkill, NM wifi-off, legacy dtoverlay,
+# and unmanaged wlan devices left behind from older versions.
+rfkill unblock wifi 2>/dev/null || true
 nmcli radio wifi on 2>/dev/null || true
-# Remove legacy firmware-level wifi disable (needs reboot to take effect)
 sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
-# --- USB-WLAN preference ---
-# Find which adapter is USB and which is onboard (names can be swapped)
-USB_WLAN=""
-ONBOARD_WLAN=""
 for iface in /sys/class/net/wlan*; do
+    [ -e "$iface" ] || continue
     name=$(basename "$iface")
-    link=$(readlink -f "$iface" 2>/dev/null)
-    if echo "$link" | grep -q usb; then
-        USB_WLAN="$name"
-    elif echo "$link" | grep -q mmc; then
-        ONBOARD_WLAN="$name"
-    fi
+    nmcli device set "$name" managed yes 2>/dev/null || true
 done
-
-if [ -n "$USB_WLAN" ] && [ -n "$ONBOARD_WLAN" ]; then
-    # Both present — disable onboard, use USB
-    nmcli device disconnect "$ONBOARD_WLAN" 2>/dev/null || true
-    nmcli device set "$ONBOARD_WLAN" managed no 2>/dev/null || true
-    nmcli device set "$USB_WLAN" managed yes 2>/dev/null || true
-elif [ -n "$ONBOARD_WLAN" ]; then
-    # Only onboard — ensure it's active
-    nmcli device set "$ONBOARD_WLAN" managed yes 2>/dev/null || true
-elif [ -n "$USB_WLAN" ]; then
-    # Only USB — ensure it's active
-    nmcli device set "$USB_WLAN" managed yes 2>/dev/null || true
-fi
 
 # --- Chromium translate policy ---
 if [ ! -f /etc/chromium/policies/managed/no-translate.json ]; then

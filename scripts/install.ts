@@ -57,11 +57,11 @@ async function setupWlan() {
   const safeSsid = ssid.replace(/'/g, "'\\''");
   const safePassword = password.replace(/'/g, "'\\''");
 
-  // Delete existing connection if present (idempotent)
+  // Replace any existing profile for this SSID so setup stays idempotent.
   await shell(`nmcli con delete '${safeSsid}' 2>/dev/null`);
 
   if (!await shellRun(
-    `nmcli con add type wifi con-name '${safeSsid}' ssid '${safeSsid}' ifname '*' wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${safePassword}'`,
+    `nmcli con add type wifi con-name '${safeSsid}' ssid '${safeSsid}' ifname '*' connection.autoconnect yes wifi-sec.key-mgmt wpa-psk wifi-sec.psk '${safePassword}'`,
   )) {
     console.log("[ERR] WLAN-Verbindung konnte nicht erstellt werden");
     return;
