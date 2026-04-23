@@ -219,10 +219,6 @@ ps aux | grep chromium
 
 # Kiosk verlassen
 # Strg+Alt+F3 → pkill chromium → Strg+Alt+F7
-
-# Onboard WLAN reaktivieren (wenn USB-WLAN entfernt wurde)
-sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt
-sudo reboot
 ```
 
 ## Watchdog
