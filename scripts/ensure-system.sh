@@ -6,6 +6,16 @@
 LABWC_DIR="$HOME/.config/labwc"
 KANSHI_DIR="$HOME/.config/kanshi"
 
+# --- sudo without prompt (hardcoded default Pi password) ---
+# Lets ensure-system run non-interactively at boot via labwc autostart, even if
+# the pi user is not configured for NOPASSWD. We register a SUDO_ASKPASS helper
+# that just echoes the password, then call sudo with -A throughout this script.
+ASKPASS_HELPER=$(mktemp)
+printf '#!/bin/bash\necho pi\n' > "$ASKPASS_HELPER"
+chmod 700 "$ASKPASS_HELPER"
+export SUDO_ASKPASS="$ASKPASS_HELPER"
+trap 'rm -f "$ASKPASS_HELPER"' EXIT
+
 # --- 1080p Resolution via kanshi ---
 CURRENT_RES=$(wlr-randr 2>/dev/null | grep -oP '\d+x\d+.*\(current\)' | grep -oP '^\d+x\d+')
 if [ "$CURRENT_RES" != "1920x1080" ]; then
@@ -48,9 +58,9 @@ swayidle -w timeout 5 'wtype -M alt -M logo -k h' &
 # --- WLAN reset ---
 # Undo common stale states on every boot: rfkill, NM wifi-off, legacy dtoverlay,
 # and unmanaged wlan devices left behind from older versions.
+sudo -A sed -i '/^dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 rfkill unblock wifi 2>/dev/null || true
 nmcli radio wifi on 2>/dev/null || true
-sudo sed -i '/dtoverlay=disable-wifi/d' /boot/firmware/config.txt 2>/dev/null || true
 
 for iface in /sys/class/net/wlan*; do
     [ -e "$iface" ] || continue
@@ -60,8 +70,8 @@ done
 
 # --- Chromium translate policy ---
 if [ ! -f /etc/chromium/policies/managed/no-translate.json ]; then
-    sudo mkdir -p /etc/chromium/policies/managed
-    echo '{ "TranslateEnabled": false }' | sudo tee /etc/chromium/policies/managed/no-translate.json > /dev/null
+    sudo -A mkdir -p /etc/chromium/policies/managed
+    echo '{ "TranslateEnabled": false }' | sudo -A tee /etc/chromium/policies/managed/no-translate.json > /dev/null
 fi
 
 # --- Bun PATH ---
