@@ -166,15 +166,6 @@ export async function syncLocation(
 
   try {
     log("sync", `Gestartet: ${location}`);
-    onProgress?.("Pruefe Internet...");
-
-    try {
-      await fetch("https://1.1.1.1", { method: "HEAD", signal: AbortSignal.timeout(5_000) });
-    } catch {
-      log("sync", "Kein Internet - uebersprungen");
-      return { success: false, downloaded: 0, updated: 0, deleted: 0, unchanged: 0, error: "Kein Internet" };
-    }
-
     onProgress?.("Lade Dateiliste...");
     const driveFiles = await fetchLocationFiles(location);
 
